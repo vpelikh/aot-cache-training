@@ -139,6 +139,13 @@ The plugin resolves the launcher at your project's own JUnit Platform version an
 it to the training JVM. It never adds JUnit (or anything else) to your test class path, so
 your dependency tree and your normal `test` task are untouched.
 
+### Training JVM
+
+The training run needs a JDK 25+ JVM. Gradle uses the project's Java toolchain (defaulting
+to 25) for the training task; Maven uses the JVM running Maven. Both fail fast with an
+actionable message when the training JVM is too old. For Maven, point the plugin at another
+JVM with `-Daot.cache.trainingJvm=/path/to/java` or the `<trainingJvm>` configuration.
+
 ### Verification and shutdown hooks
 
 The JVM assembles the cache **after** shutdown hooks have run. A shutdown-hook based check

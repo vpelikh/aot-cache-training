@@ -106,6 +106,13 @@ public class AotCacheRecordMojo extends AbstractMojo {
 	@Parameter(defaultValue = "false")
 	private boolean allowEmptyWorkload = false;
 
+	/**
+	 * Path to the {@code java} executable used for the training run. Defaults to the JVM
+	 * running Maven. Must be JDK {@value AotCache#MINIMUM_RECORDING_JDK} or later.
+	 */
+	@Parameter(property = "aot.cache.trainingJvm")
+	private String trainingJvm;
+
 	@Override
 	public void execute() throws MojoExecutionException {
 		if (this.skip) {
@@ -118,6 +125,7 @@ public class AotCacheRecordMojo extends AbstractMojo {
 		}
 		Path cacheFile = resolveCacheFile();
 		Path workDirectory = cacheFile.getParent().resolve("classpath");
+		checkTrainingJdk();
 		try {
 			Files.createDirectories(workDirectory);
 			List<String> command = buildCommand(cacheFile, workDirectory);
@@ -249,7 +257,38 @@ public class AotCacheRecordMojo extends AbstractMojo {
 		}
 	}
 
+	/**
+	 * Verify the training JVM is new enough before starting the (slow) training run.
+	 * @throws MojoExecutionException if the training JVM is older than the recording minimum
+	 */
+	private void checkTrainingJdk() throws MojoExecutionException {
+		try {
+			Process process = new ProcessBuilder(javaExecutable(), "-version").redirectErrorStream(true).start();
+			String output = new String(process.getInputStream().readAllBytes());
+			process.waitFor();
+			java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("version \"(\\d+)").matcher(output);
+			if (matcher.find()) {
+				int feature = Integer.parseInt(matcher.group(1));
+				if (feature < AotCache.MINIMUM_RECORDING_JDK) {
+					throw new MojoExecutionException("AOT cache recording requires JDK " + AotCache.MINIMUM_RECORDING_JDK
+							+ " or later, but the training JVM is JDK " + feature
+							+ ". Set the plugin's <trainingJvm> or run Maven on JDK " + AotCache.MINIMUM_RECORDING_JDK + "+.");
+				}
+			}
+		}
+		catch (IOException ex) {
+			throw new MojoExecutionException("Unable to run the training JVM (" + javaExecutable() + ")", ex);
+		}
+		catch (InterruptedException ex) {
+			Thread.currentThread().interrupt();
+			throw new MojoExecutionException("Interrupted while checking the training JVM", ex);
+		}
+	}
+
 	private String javaExecutable() {
+		if (this.trainingJvm != null && !this.trainingJvm.isBlank()) {
+			return this.trainingJvm;
+		}
 		return Path.of(System.getProperty("java.home"), "bin", "java").toString();
 	}
 
@@ -300,6 +339,10 @@ public class AotCacheRecordMojo extends AbstractMojo {
 
 	void setAllowEmptyWorkload(boolean allowEmptyWorkload) {
 		this.allowEmptyWorkload = allowEmptyWorkload;
+	}
+
+	void setTrainingJvm(String trainingJvm) {
+		this.trainingJvm = trainingJvm;
 	}
 
 }

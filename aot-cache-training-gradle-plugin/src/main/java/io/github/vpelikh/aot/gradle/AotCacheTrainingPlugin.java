@@ -30,6 +30,7 @@ import org.gradle.api.tasks.JavaExec;
 import org.gradle.api.tasks.SourceSet;
 import org.gradle.api.tasks.SourceSetContainer;
 import org.gradle.api.tasks.TaskProvider;
+import org.gradle.jvm.toolchain.JavaLanguageVersion;
 import org.gradle.jvm.tasks.Jar;
 
 /**
@@ -135,6 +136,33 @@ public class AotCacheTrainingPlugin implements Plugin<Project> {
 			TaskProvider<Jar> mainJar, TaskProvider<Jar> testJar) {
 		task.setGroup(GROUP);
 		task.setDescription("Records a JVM AOT cache from the integration tests");
+
+		// Run the training JVM on the project's Java toolchain (defaulting to the recording
+		// minimum, JDK 25), so recording does not depend on whichever JVM runs Gradle.
+		task.getJavaLauncher()
+			.set(project.getProviders().provider(() -> {
+				JavaLanguageVersion version = project.getExtensions()
+					.getByType(org.gradle.api.plugins.JavaPluginExtension.class)
+					.getToolchain()
+					.getLanguageVersion()
+					.getOrElse(JavaLanguageVersion.of(AotCache.MINIMUM_RECORDING_JDK));
+				return project.getExtensions()
+					.getByType(org.gradle.jvm.toolchain.JavaToolchainService.class)
+					.launcherFor((spec) -> spec.getLanguageVersion().set(version))
+					.get();
+			}));
+		task.doFirst("check the training JDK", (unused) -> {
+			int feature = task.getJavaLauncher()
+				.get()
+				.getMetadata()
+				.getLanguageVersion()
+				.asInt();
+			if (feature < AotCache.MINIMUM_RECORDING_JDK) {
+				throw new IllegalStateException("AOT cache recording requires JDK " + AotCache.MINIMUM_RECORDING_JDK
+						+ " or later, but the training JVM is JDK " + feature
+						+ ". Configure a Java 25+ toolchain for the project.");
+			}
+		});
 
 		task.dependsOn(mainJar, testJar);
 		task.getMainClass().set("io.github.vpelikh.aot.trainer.TrainingLauncher");

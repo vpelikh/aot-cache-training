@@ -19,8 +19,8 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
       - name: Build
         run: ./gradlew build --no-daemon --stacktrace
-      - name: Publish plugins to the local Maven repository
-        run: ./gradlew publishToMavenLocal --no-daemon --stacktrace
+      - name: Publish plugins to the local test repository
+        run: ./gradlew publishForIntegrationTests --no-daemon --stacktrace
       - name: Verify the Gradle Spring Boot example records a cache
         working-directory: examples/gradle-spring-boot
         run: ../../gradlew aotCacheTraining verifyAotCache --no-daemon --stacktrace
@@ -28,4 +28,5 @@ jobs:
         working-directory: examples/maven-spring-boot
         run: |
           version="$(sed -n 's/^version=//p' ../../gradle.properties)"
-          mvn -B verify --no-transfer-progress -Daot.cache.record=true -Daot-cache-training.version="$version"
+          mvn -B verify --no-transfer-progress -Daot.cache.record=true \
+            -Daot-cache-training.version="$version" -Dmaven.repo.local=../../build/local-repo

@@ -103,4 +103,35 @@ public final class TrainingClasspath {
 		return String.join(java.io.File.pathSeparator, entries);
 	}
 
+	/**
+	 * Return {@code true} if the given class path entry is a mocking library that installs a
+	 * Java agent or class-file transformer.
+	 *
+	 * <p>Mocking libraries (Mockito, Byte Buddy, Objenesis) self-attach agents at runtime.
+	 * The transformers they install make the JVM's cache-assembly step fail with
+	 * {@code NoClassDefFoundError} or {@code Unsupported location}, so they must not be on
+	 * the training class path.
+	 * @param entry a class path entry or file name
+	 * @return {@code true} if the entry is a mocking library
+	 */
+	public static boolean isMockingLibrary(String entry) {
+		String name = entry.replace('\\', '/');
+		int slash = name.lastIndexOf('/');
+		if (slash >= 0) {
+			name = name.substring(slash + 1);
+		}
+		return name.startsWith("mockito-") || name.startsWith("byte-buddy") || name.startsWith("objenesis-");
+	}
+
+	/**
+	 * Return a copy of the given class path elements with mocking libraries removed.
+	 * @param classpathElements the raw class path elements
+	 * @return the filtered elements
+	 */
+	public static List<Path> withoutMockingLibraries(List<Path> classpathElements) {
+		return classpathElements.stream()
+			.filter((element) -> element != null && !isMockingLibrary(element.getFileName().toString()))
+			.toList();
+	}
+
 }

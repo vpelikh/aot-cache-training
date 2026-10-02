@@ -1,0 +1,37 @@
+plugins {
+	id "java"
+	id "org.springframework.boot" version "4.1.1"
+	id "io.github.vpelikh.aot-cache-training"
+}
+
+repositories {
+	mavenCentral()
+}
+
+dependencies {
+	implementation platform("org.springframework.boot:spring-boot-dependencies:4.1.1")
+	implementation "org.springframework.boot:spring-boot-starter-web"
+	testImplementation "org.springframework.boot:spring-boot-starter-test"
+	testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+}
+
+test {
+	useJUnitPlatform()
+}
+
+aotCacheTraining {
+	enabled = true
+}
+
+// Boot's bootBuildImage picks up aot-cache/application.aot from the application content,
+// so copying the recorded cache there is enough for the Paketo buildpack to reuse it.
+tasks.register("prepareImageContent", Copy) {
+	dependsOn "aotCacheTraining"
+	from layout.buildDirectory.dir("aot-cache")
+	into layout.buildDirectory.dir("image-content/aot-cache")
+}
+
+bootBuildImage {
+	dependsOn "prepareImageContent"
+	environment = ["BP_JVM_AOTCACHE_ENABLED": "true"]
+}

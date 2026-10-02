@@ -151,6 +151,8 @@ public class AotCacheRecordMojo extends AbstractMojo {
 		}
 		// The launcher, its core helpers and the JUnit Platform live in the plugin realm.
 		elements.addAll(pluginClasspath());
+		// Mocking libraries self-attach agents that break cache assembly.
+		elements = new ArrayList<>(TrainingClasspath.withoutMockingLibraries(elements));
 		return TrainingClasspath.jarOnlyClasspath(elements, workDirectory);
 	}
 

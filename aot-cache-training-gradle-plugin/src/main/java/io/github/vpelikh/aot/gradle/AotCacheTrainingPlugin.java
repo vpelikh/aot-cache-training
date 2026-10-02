@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import io.github.vpelikh.aot.AotCache;
+import io.github.vpelikh.aot.trainer.TrainingClasspath;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
 import org.gradle.api.tasks.JavaExec;
@@ -138,6 +139,8 @@ public class AotCacheTrainingPlugin implements Plugin<Project> {
 			.getFiles()
 			.stream()
 			.filter(File::isFile)
+			.filter((file) -> !io.github.vpelikh.aot.trainer.TrainingClasspath
+				.isMockingLibrary(file.getName()))
 			.toList()));
 		// The launcher and its core helpers live on the plugin's class path, because the
 		// plugin depends on the trainer module. Resolve their jars so the training JVM can

@@ -42,7 +42,7 @@ class JUnitPlatformVersionTests {
 
 	@Test
 	void fromLauncherJar() {
-		assertThat(JUnitPlatformVersion.fromFileName("junit-platform-launcher-1.14.4.jar")).contains("1.14.4");
+		assertThat(JUnitPlatformVersion.fromFileName("junit-platform-launcher-6.1.3.jar")).contains("6.1.3");
 	}
 
 	@Test

@@ -223,6 +223,6 @@ public class AotCacheTrainingPlugin implements Plugin<Project> {
 	 * The JUnit Platform version this plugin was compiled against, used only when the project
 	 * provides no JUnit Platform of its own.
 	 */
-	private static final String DEFAULT_JUNIT_PLATFORM_VERSION = "1.14.4";
+	private static final String DEFAULT_JUNIT_PLATFORM_VERSION = "6.1.3";
 
 }

@@ -151,6 +151,8 @@ and runs after the training JVM exits (`AotCache.verifyRecordedCache`).
 - JDK 24+ to load a pre-recorded cache (`-XX:AOTCache`, JEP 483).
 - Spring Framework 6.2+ / Spring Boot 3.x+ for the `TestExecutionListener` (it is a no-op
   unless recording is enabled).
+- Built against JUnit Platform 6 with JUnit Platform 5 runtime compatibility, and written
+  for the JDK 25 toolchain the AOT cache feature requires.
 
 ## Building
 

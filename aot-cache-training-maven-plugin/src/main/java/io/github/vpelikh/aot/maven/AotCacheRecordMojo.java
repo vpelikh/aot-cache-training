@@ -54,7 +54,7 @@ import org.apache.maven.project.MavenProject;
 		requiresDependencyResolution = org.apache.maven.plugins.annotations.ResolutionScope.TEST, threadSafe = true)
 public class AotCacheRecordMojo extends AbstractMojo {
 
-	private static final String DEFAULT_JUNIT_PLATFORM_VERSION = "1.14.4";
+	private static final String DEFAULT_JUNIT_PLATFORM_VERSION = "6.1.3";
 
 	@Parameter(defaultValue = "${project}", readonly = true, required = true)
 	private MavenProject project;

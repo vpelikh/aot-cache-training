@@ -27,10 +27,13 @@ dependencies {
 	// deliberately NOT a transitive dependency: the training class path must use the JUnit
 	// Platform generation that the target project already uses, resolved by the build
 	// plugins at run time. Shipping our own generation here would clash with the project's
-	// (for example, a JUnit 6 project versus our JUnit 5 Platform).
-	compileOnly("org.junit.platform:junit-platform-launcher:1.14.4")
-	compileOnly("org.junit.platform:junit-platform-engine:1.14.4")
-	compileOnly("org.junit.platform:junit-platform-commons:1.14.4")
+	// (for example, a JUnit 5 project versus our JUnit 6 Platform).
+	//
+	// Compiled against JUnit Platform 6, which is API-compatible with the 5.x line at run
+	// time, so the launcher works for projects on either generation.
+	compileOnly("org.junit.platform:junit-platform-launcher:6.1.3")
+	compileOnly("org.junit.platform:junit-platform-engine:6.1.3")
+	compileOnly("org.junit.platform:junit-platform-commons:6.1.3")
 
 	testImplementation(libs.junit.jupiter)
 	testRuntimeOnly(libs.junit.platform.launcher)

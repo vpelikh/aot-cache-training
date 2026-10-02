@@ -198,7 +198,8 @@ Publishing is driven by the `release` workflow, run manually from the Actions ta
 2. publishes every module to Maven Central via the Sonatype Central Portal (the deployment is
    released automatically, no manual step),
 3. publishes the Gradle plugin to the Gradle Plugin Portal,
-4. creates the `vX.Y.Z` tag and a GitHub release with generated notes, and
+4. creates the `vX.Y.Z` tag and a GitHub release whose notes list the commits since the
+   previous tag, and
 5. bumps the patch version in `gradle.properties` and pushes it, so the next release is ready.
 
 The workflow reads these repository secrets:

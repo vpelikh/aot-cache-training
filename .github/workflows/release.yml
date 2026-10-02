@@ -82,9 +82,27 @@ jobs:
 
       - name: Create the GitHub release
         run: |
-          gh release create "v${{ steps.version.outputs.version }}" \
-            --title "v${{ steps.version.outputs.version }}" \
-            --generate-notes
+          # Build the changelog from commit subjects since the previous tag. This project
+          # merges directly to main without pull requests, so GitHub's --generate-notes
+          # (which lists merged PRs) would be empty.
+          current="v${{ steps.version.outputs.version }}"
+          previous="$(git tag --list 'v*' --sort=-v:refname | grep -vx "$current" | head -1)"
+          if [ -n "$previous" ]; then
+            range="${previous}..HEAD"
+            compare="**Full Changelog**: https://github.com/${GITHUB_REPOSITORY}/compare/${previous}...${current}"
+          else
+            range="HEAD"
+            compare="**Full Changelog**: https://github.com/${GITHUB_REPOSITORY}/commits/${current}"
+          fi
+          {
+            echo "## What's Changed"
+            echo
+            git log "$range" --no-merges --pretty=format:'- %s (%h)'
+            echo
+            echo
+            echo "$compare"
+          } > RELEASE_NOTES.md
+          gh release create "$current" --title "$current" --notes-file RELEASE_NOTES.md
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 

@@ -27,9 +27,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class SampleTrainingTests {
 
-	@Test
-	void passes() {
-		assertThat(1 + 1).isEqualTo(2);
-	}
+    @Test
+    void passes() {
+        assertThat(1 + 1).isEqualTo(2);
+    }
 
 }

@@ -1,14 +1,14 @@
 pluginManagement {
-	repositories {
-		gradlePluginPortal()
-		mavenCentral()
-	}
+    repositories {
+        gradlePluginPortal()
+        mavenCentral()
+    }
 }
 
 dependencyResolutionManagement {
-	repositories {
-		mavenCentral()
-	}
+    repositories {
+        mavenCentral()
+    }
 }
 
 rootProject.name = "aot-cache-training"

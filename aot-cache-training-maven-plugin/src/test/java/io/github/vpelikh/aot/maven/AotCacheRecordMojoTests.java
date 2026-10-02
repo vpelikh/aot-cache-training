@@ -32,46 +32,46 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class AotCacheRecordMojoTests {
 
-	@Test
-	void doesNothingWhenDisabled(@TempDir Path basedir) throws Exception {
-		MavenProject project = project(basedir);
-		AotCacheRecordMojo mojo = new AotCacheRecordMojo();
-		mojo.setProject(project);
-		mojo.setEnabled(false);
+    @Test
+    void doesNothingWhenDisabled(@TempDir Path basedir) throws Exception {
+        MavenProject project = project(basedir);
+        AotCacheRecordMojo mojo = new AotCacheRecordMojo();
+        mojo.setProject(project);
+        mojo.setEnabled(false);
 
-		mojo.execute();
-	}
+        mojo.execute();
+    }
 
-	@Test
-	void resolvesCacheFileUnderBuildDirectory(@TempDir Path basedir) {
-		AotCacheRecordMojo mojo = new AotCacheRecordMojo();
-		mojo.setProject(project(basedir));
+    @Test
+    void resolvesCacheFileUnderBuildDirectory(@TempDir Path basedir) {
+        AotCacheRecordMojo mojo = new AotCacheRecordMojo();
+        mojo.setProject(project(basedir));
 
-		Path cacheFile = mojo.resolveCacheFile();
+        Path cacheFile = mojo.resolveCacheFile();
 
-		assertThat(cacheFile).isEqualTo(basedir.resolve("target").resolve("aot-cache").resolve("application.aot")
-			.toAbsolutePath()
-			.normalize());
-	}
+        assertThat(cacheFile).isEqualTo(basedir.resolve("target").resolve("aot-cache").resolve("application.aot")
+            .toAbsolutePath()
+            .normalize());
+    }
 
-	@Test
-	void skipsWhenSkipIsSet(@TempDir Path basedir) throws Exception {
-		AotCacheRecordMojo mojo = new AotCacheRecordMojo();
-		mojo.setProject(project(basedir));
-		mojo.setEnabled(true);
-		mojo.setSkip(true);
+    @Test
+    void skipsWhenSkipIsSet(@TempDir Path basedir) throws Exception {
+        AotCacheRecordMojo mojo = new AotCacheRecordMojo();
+        mojo.setProject(project(basedir));
+        mojo.setEnabled(true);
+        mojo.setSkip(true);
 
-		mojo.execute();
-	}
+        mojo.execute();
+    }
 
-	private MavenProject project(Path basedir) {
-		MavenProject project = new MavenProject();
-		project.setFile(basedir.resolve("pom.xml").toFile());
-		Build build = new Build();
-		build.setDirectory("target");
-		project.getModel().setBuild(build);
-		project.setBuild(build);
-		return project;
-	}
+    private MavenProject project(Path basedir) {
+        MavenProject project = new MavenProject();
+        project.setFile(basedir.resolve("pom.xml").toFile());
+        Build build = new Build();
+        build.setDirectory("target");
+        project.getModel().setBuild(build);
+        project.setBuild(build);
+        return project;
+    }
 
 }

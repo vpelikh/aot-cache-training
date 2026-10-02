@@ -15,45 +15,45 @@
  */
 
 plugins {
-	`java-library`
+    `java-library`
 }
 
 description = "JUnit Platform entry point that runs the tests used as an AOT cache training workload"
 
 dependencies {
-	api(project(":aot-cache-training"))
+    api(project(":aot-cache-training"))
 
-	// The JUnit Platform launcher API is needed to compile the launcher, but it is
-	// deliberately NOT a transitive dependency: the training class path must use the JUnit
-	// Platform generation that the target project already uses, resolved by the build
-	// plugins at run time. Shipping our own generation here would clash with the project's
-	// (for example, a JUnit 5 project versus our JUnit 6 Platform).
-	//
-	// Compiled against JUnit Platform 6, which is API-compatible with the 5.x line at run
-	// time, so the launcher works for projects on either generation.
-	compileOnly(libs.junit.platform.launcher)
-	compileOnly(libs.junit.platform.engine)
-	compileOnly(libs.junit.platform.commons)
+    // The JUnit Platform launcher API is needed to compile the launcher, but it is
+    // deliberately NOT a transitive dependency: the training class path must use the JUnit
+    // Platform generation that the target project already uses, resolved by the build
+    // plugins at run time. Shipping our own generation here would clash with the project's
+    // (for example, a JUnit 5 project versus our JUnit 6 Platform).
+    //
+    // Compiled against JUnit Platform 6, which is API-compatible with the 5.x line at run
+    // time, so the launcher works for projects on either generation.
+    compileOnly(libs.junit.platform.launcher)
+    compileOnly(libs.junit.platform.engine)
+    compileOnly(libs.junit.platform.commons)
 
-	testImplementation(libs.junit.jupiter)
-	testRuntimeOnly(libs.junit.platform.launcher)
-	testImplementation(libs.assertj.core)
+    testImplementation(libs.junit.jupiter)
+    testRuntimeOnly(libs.junit.platform.launcher)
+    testImplementation(libs.assertj.core)
 }
 
 // Package the test fixtures and the production classes into a JAR so the end-to-end test
 // can run the launcher on a JAR-only class path, exactly as the build plugins arrange for
 // real projects.
 tasks.register<Jar>("trainingClassesJar") {
-	archiveClassifier = "training"
-	from(sourceSets["main"].output)
-	from(sourceSets["test"].output)
+    archiveClassifier = "training"
+    from(sourceSets["main"].output)
+    from(sourceSets["test"].output)
 }
 
 tasks.named<Test>("test") {
-	systemProperty("aot.test.runtimeClasspath", sourceSets["test"].runtimeClasspath.filter {
-		it.name.endsWith(".jar")
-	}.asPath)
-	systemProperty("aot.test.classesJar", tasks.named<Jar>("trainingClassesJar").get().archiveFile.get().asFile.absolutePath)
-	systemProperty("aot.test.coreJar", project(":aot-cache-training").tasks.named<Jar>("jar").get().archiveFile.get().asFile.absolutePath)
-	dependsOn("trainingClassesJar", ":aot-cache-training:jar")
+    systemProperty("aot.test.runtimeClasspath", sourceSets["test"].runtimeClasspath.filter {
+        it.name.endsWith(".jar")
+    }.asPath)
+    systemProperty("aot.test.classesJar", tasks.named<Jar>("trainingClassesJar").get().archiveFile.get().asFile.absolutePath)
+    systemProperty("aot.test.coreJar", project(":aot-cache-training").tasks.named<Jar>("jar").get().archiveFile.get().asFile.absolutePath)
+    dependsOn("trainingClassesJar", ":aot-cache-training:jar")
 }

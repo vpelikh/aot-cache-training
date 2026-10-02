@@ -15,31 +15,31 @@
  */
 
 plugins {
-	`java-gradle-plugin`
-	`maven-publish`
+    `java-gradle-plugin`
+    `maven-publish`
 }
 
 description = "Gradle plugin that records a JVM AOT cache from integration tests"
 
 dependencies {
-	implementation(project(":aot-cache-training"))
-	implementation(project(":aot-cache-training-trainer"))
+    implementation(project(":aot-cache-training"))
+    implementation(project(":aot-cache-training-trainer"))
 
-	compileOnly(gradleApi())
+    compileOnly(gradleApi())
 
-	testImplementation(libs.junit.jupiter)
-	testRuntimeOnly(libs.junit.platform.launcher)
-	testImplementation(libs.assertj.core)
-	testImplementation(gradleTestKit())
+    testImplementation(libs.junit.jupiter)
+    testRuntimeOnly(libs.junit.platform.launcher)
+    testImplementation(libs.assertj.core)
+    testImplementation(gradleTestKit())
 }
 
 gradlePlugin {
-	plugins {
-		create("aotCacheTraining") {
-			id = "io.github.vpelikh.aot-cache-training"
-			displayName = "AOT cache training"
-			description = "Records a JVM AOT cache from integration tests by injecting -XX:AOTCacheOutput"
-			implementationClass = "io.github.vpelikh.aot.gradle.AotCacheTrainingPlugin"
-		}
-	}
+    plugins {
+        create("aotCacheTraining") {
+            id = "io.github.vpelikh.aot-cache-training"
+            displayName = "AOT cache training"
+            description = "Records a JVM AOT cache from integration tests by injecting -XX:AOTCacheOutput"
+            implementationClass = "io.github.vpelikh.aot.gradle.AotCacheTrainingPlugin"
+        }
+    }
 }

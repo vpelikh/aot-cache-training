@@ -41,72 +41,72 @@ import org.apache.maven.project.MavenProject;
 @Mojo(name = "verify", defaultPhase = LifecyclePhase.VERIFY, threadSafe = true)
 public class AotCacheVerifyMojo extends AbstractMojo {
 
-	/**
-	 * Create the mojo. Maven instantiates it and injects the configured parameters.
-	 */
-	public AotCacheVerifyMojo() {
-	}
+    /**
+     * Create the mojo. Maven instantiates it and injects the configured parameters.
+     */
+    public AotCacheVerifyMojo() {
+    }
 
-	@Parameter(defaultValue = "${project}", readonly = true, required = true)
-	private MavenProject project;
+    @Parameter(defaultValue = "${project}", readonly = true, required = true)
+    private MavenProject project;
 
-	/**
-	 * Whether AOT cache recording was enabled. Can also be set with
-	 * <code>-Daot.cache.record=true</code>.
-	 */
-	@Parameter(property = "aot.cache.record", defaultValue = "false")
-	private boolean enabled;
+    /**
+     * Whether AOT cache recording was enabled. Can also be set with
+     * <code>-Daot.cache.record=true</code>.
+     */
+    @Parameter(property = "aot.cache.record", defaultValue = "false")
+    private boolean enabled;
 
-	/**
-	 * Skip execution entirely. Can also be set with <code>-Daot.cache.skip=true</code>.
-	 */
-	@Parameter(property = "aot.cache.skip", defaultValue = "false")
-	private boolean skip;
+    /**
+     * Skip execution entirely. Can also be set with <code>-Daot.cache.skip=true</code>.
+     */
+    @Parameter(property = "aot.cache.skip", defaultValue = "false")
+    private boolean skip;
 
-	/**
-	 * Directory that holds the recorded cache, relative to the project build directory.
-	 */
-	@Parameter(defaultValue = "aot-cache")
-	private String cacheDirectory = AotCache.CACHE_DIRECTORY;
+    /**
+     * Directory that holds the recorded cache, relative to the project build directory.
+     */
+    @Parameter(defaultValue = "aot-cache")
+    private String cacheDirectory = AotCache.CACHE_DIRECTORY;
 
-	@Override
-	public void execute() throws MojoExecutionException {
-		if (this.skip || !this.enabled) {
-			return;
-		}
-		Path cacheFile = resolveCacheFile();
-		long size = AotCache.verifyRecordedCache(cacheFile);
-		if (size <= 0) {
-			throw new MojoExecutionException("AOT cache recording was enabled (aot.cache.record=true) but no "
-					+ "non-empty cache was found at " + cacheFile + ". The training run needs JDK "
-					+ AotCache.MINIMUM_RECORDING_JDK + "+ and a clean exit; see the 'record' goal output above.");
-		}
-		getLog().info("Verified AOT cache at " + cacheFile + " (" + size + " bytes).");
-	}
+    @Override
+    public void execute() throws MojoExecutionException {
+        if (this.skip || !this.enabled) {
+            return;
+        }
+        Path cacheFile = resolveCacheFile();
+        long size = AotCache.verifyRecordedCache(cacheFile);
+        if (size <= 0) {
+            throw new MojoExecutionException("AOT cache recording was enabled (aot.cache.record=true) but no "
+                    + "non-empty cache was found at " + cacheFile + ". The training run needs JDK "
+                    + AotCache.MINIMUM_RECORDING_JDK + "+ and a clean exit; see the 'record' goal output above.");
+        }
+        getLog().info("Verified AOT cache at " + cacheFile + " (" + size + " bytes).");
+    }
 
-	Path resolveCacheFile() {
-		return this.project.getBasedir().toPath()
-			.resolve(this.project.getBuild().getDirectory())
-			.resolve(this.cacheDirectory)
-			.resolve(AotCache.CACHE_FILE_NAME)
-			.toAbsolutePath()
-			.normalize();
-	}
+    Path resolveCacheFile() {
+        return this.project.getBasedir().toPath()
+            .resolve(this.project.getBuild().getDirectory())
+            .resolve(this.cacheDirectory)
+            .resolve(AotCache.CACHE_FILE_NAME)
+            .toAbsolutePath()
+            .normalize();
+    }
 
-	void setProject(MavenProject project) {
-		this.project = project;
-	}
+    void setProject(MavenProject project) {
+        this.project = project;
+    }
 
-	void setEnabled(boolean enabled) {
-		this.enabled = enabled;
-	}
+    void setEnabled(boolean enabled) {
+        this.enabled = enabled;
+    }
 
-	void setSkip(boolean skip) {
-		this.skip = skip;
-	}
+    void setSkip(boolean skip) {
+        this.skip = skip;
+    }
 
-	void setCacheDirectory(String cacheDirectory) {
-		this.cacheDirectory = cacheDirectory;
-	}
+    void setCacheDirectory(String cacheDirectory) {
+        this.cacheDirectory = cacheDirectory;
+    }
 
 }

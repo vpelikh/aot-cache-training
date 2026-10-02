@@ -37,204 +37,204 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class AotCacheTrainingPluginFunctionalTests {
 
-	static boolean jdkSupportsRecording() {
-		return Runtime.version().feature() >= 25;
-	}
+    static boolean jdkSupportsRecording() {
+        return Runtime.version().feature() >= 25;
+    }
 
-	@TempDir
-	Path projectDir;
+    @TempDir
+    Path projectDir;
 
-	@BeforeEach
-	void setUp() throws IOException {
-		write("settings.gradle.kts", """
-				pluginManagement {
-					repositories {
-						gradlePluginPortal()
-						mavenCentral()
-					}
-				}
-				rootProject.name = "sample"
-				""");
-		write("build.gradle.kts", """
-				plugins {
-					java
-					id("io.github.vpelikh.aot-cache-training")
-				}
+    @BeforeEach
+    void setUp() throws IOException {
+        write("settings.gradle.kts", """
+                pluginManagement {
+                    repositories {
+                        gradlePluginPortal()
+                        mavenCentral()
+                    }
+                }
+                rootProject.name = "sample"
+                """);
+        write("build.gradle.kts", """
+                plugins {
+                    java
+                    id("io.github.vpelikh.aot-cache-training")
+                }
 
-				repositories {
-					mavenCentral()
-				}
+                repositories {
+                    mavenCentral()
+                }
 
-				dependencies {
-					testImplementation(platform("org.junit:junit-bom:6.1.3"))
-					testImplementation("org.junit.jupiter:junit-jupiter")
-					testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-				}
+                dependencies {
+                    testImplementation(platform("org.junit:junit-bom:6.1.3"))
+                    testImplementation("org.junit.jupiter:junit-jupiter")
+                    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+                }
 
-				tasks.test {
-					useJUnitPlatform()
-				}
+                tasks.test {
+                    useJUnitPlatform()
+                }
 
-				aotCacheTraining {
-					enabled = true
-				}
-				""");
-		write("src/test/java/sample/SampleTests.java", """
-				package sample;
+                aotCacheTraining {
+                    enabled = true
+                }
+                """);
+        write("src/test/java/sample/SampleTests.java", """
+                package sample;
 
-				import org.junit.jupiter.api.Test;
+                import org.junit.jupiter.api.Test;
 
-				class SampleTests {
+                class SampleTests {
 
-					@Test
-					void passes() {
-					}
+                    @Test
+                    void passes() {
+                    }
 
-				}
-				""");
-	}
+                }
+                """);
+    }
 
-	@Test
-	@EnabledIf("io.github.vpelikh.aot.gradle.AotCacheTrainingPluginFunctionalTests#jdkSupportsRecording")
-	void recordsCacheFromTestsOnJarOnlyClasspath() {
-		BuildResult result = runner("aotCacheTraining", "verifyAotCache").build();
+    @Test
+    @EnabledIf("io.github.vpelikh.aot.gradle.AotCacheTrainingPluginFunctionalTests#jdkSupportsRecording")
+    void recordsCacheFromTestsOnJarOnlyClasspath() {
+        BuildResult result = runner("aotCacheTraining", "verifyAotCache").build();
 
-		assertThat(result.task(":aotCacheTraining").getOutcome()).isNotNull();
-		assertThat(result.getOutput()).contains("1 tests successful");
-		assertThat(this.projectDir.resolve("build/aot-cache/application.aot")).exists();
-		assertThat(this.projectDir.resolve("build/aot-cache/application.aot").toFile().length()).isGreaterThan(0);
-	}
+        assertThat(result.task(":aotCacheTraining").getOutcome()).isNotNull();
+        assertThat(result.getOutput()).contains("1 tests successful");
+        assertThat(this.projectDir.resolve("build/aot-cache/application.aot")).exists();
+        assertThat(this.projectDir.resolve("build/aot-cache/application.aot").toFile().length()).isGreaterThan(0);
+    }
 
-	@Test
-	void recordingIsInertWhenDisabled() throws IOException {
-		write("build.gradle.kts", """
-				plugins {
-					java
-					id("io.github.vpelikh.aot-cache-training")
-				}
+    @Test
+    void recordingIsInertWhenDisabled() throws IOException {
+        write("build.gradle.kts", """
+                plugins {
+                    java
+                    id("io.github.vpelikh.aot-cache-training")
+                }
 
-				repositories {
-					mavenCentral()
-				}
+                repositories {
+                    mavenCentral()
+                }
 
-				dependencies {
-					testImplementation(platform("org.junit:junit-bom:6.1.3"))
-					testImplementation("org.junit.jupiter:junit-jupiter")
-					testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-				}
+                dependencies {
+                    testImplementation(platform("org.junit:junit-bom:6.1.3"))
+                    testImplementation("org.junit.jupiter:junit-jupiter")
+                    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+                }
 
-				tasks.test {
-					useJUnitPlatform()
-				}
-				""");
+                tasks.test {
+                    useJUnitPlatform()
+                }
+                """);
 
-		BuildResult result = runner("aotCacheTraining", "verifyAotCache").build();
+        BuildResult result = runner("aotCacheTraining", "verifyAotCache").build();
 
-		assertThat(result.getOutput()).doesNotContain("Recording an AOT cache");
-	}
+        assertThat(result.getOutput()).doesNotContain("Recording an AOT cache");
+    }
 
-	@Test
-	@EnabledIf("io.github.vpelikh.aot.gradle.AotCacheTrainingPluginFunctionalTests#jdkSupportsRecording")
-	void failingTestsFailTheTrainingRunByDefault() throws IOException {
-		write("src/test/java/sample/SampleTests.java", """
-				package sample;
+    @Test
+    @EnabledIf("io.github.vpelikh.aot.gradle.AotCacheTrainingPluginFunctionalTests#jdkSupportsRecording")
+    void failingTestsFailTheTrainingRunByDefault() throws IOException {
+        write("src/test/java/sample/SampleTests.java", """
+                package sample;
 
-				import org.junit.jupiter.api.Test;
+                import org.junit.jupiter.api.Test;
 
-				class SampleTests {
+                class SampleTests {
 
-					@Test
-					void fails() {
-						throw new AssertionError("boom");
-					}
+                    @Test
+                    void fails() {
+                        throw new AssertionError("boom");
+                    }
 
-				}
-				""");
+                }
+                """);
 
-		BuildResult result = runner("aotCacheTraining").buildAndFail();
+        BuildResult result = runner("aotCacheTraining").buildAndFail();
 
-		assertThat(result.getOutput()).contains("1 tests failed");
-	}
+        assertThat(result.getOutput()).contains("1 tests failed");
+    }
 
-	@Test
-	@EnabledIf("io.github.vpelikh.aot.gradle.AotCacheTrainingPluginFunctionalTests#jdkSupportsRecording")
-	void failingTestsDoNotFailWhenFailOnTestFailureIsDisabled() throws IOException {
-		write("build.gradle.kts", """
-				plugins {
-					java
-					id("io.github.vpelikh.aot-cache-training")
-				}
+    @Test
+    @EnabledIf("io.github.vpelikh.aot.gradle.AotCacheTrainingPluginFunctionalTests#jdkSupportsRecording")
+    void failingTestsDoNotFailWhenFailOnTestFailureIsDisabled() throws IOException {
+        write("build.gradle.kts", """
+                plugins {
+                    java
+                    id("io.github.vpelikh.aot-cache-training")
+                }
 
-				repositories {
-					mavenCentral()
-				}
+                repositories {
+                    mavenCentral()
+                }
 
-				dependencies {
-					testImplementation(platform("org.junit:junit-bom:6.1.3"))
-					testImplementation("org.junit.jupiter:junit-jupiter")
-					testRuntimeOnly("org.junit.platform:junit-platform-launcher")
-				}
+                dependencies {
+                    testImplementation(platform("org.junit:junit-bom:6.1.3"))
+                    testImplementation("org.junit.jupiter:junit-jupiter")
+                    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+                }
 
-				tasks.test {
-					useJUnitPlatform()
-				}
+                tasks.test {
+                    useJUnitPlatform()
+                }
 
-				aotCacheTraining {
-					enabled = true
-					failOnTestFailure = false
-				}
-				""");
-		write("src/test/java/sample/SampleTests.java", """
-				package sample;
+                aotCacheTraining {
+                    enabled = true
+                    failOnTestFailure = false
+                }
+                """);
+        write("src/test/java/sample/SampleTests.java", """
+                package sample;
 
-				import org.junit.jupiter.api.Test;
+                import org.junit.jupiter.api.Test;
 
-				class SampleTests {
+                class SampleTests {
 
-					@Test
-					void fails() {
-						throw new AssertionError("boom");
-					}
+                    @Test
+                    void fails() {
+                        throw new AssertionError("boom");
+                    }
 
-				}
-				""");
+                }
+                """);
 
-		BuildResult result = runner("aotCacheTraining", "verifyAotCache").build();
+        BuildResult result = runner("aotCacheTraining", "verifyAotCache").build();
 
-		assertThat(this.projectDir.resolve("build/aot-cache/application.aot")).exists();
-	}
+        assertThat(this.projectDir.resolve("build/aot-cache/application.aot")).exists();
+    }
 
-	@Test
-	@EnabledIf("io.github.vpelikh.aot.gradle.AotCacheTrainingPluginFunctionalTests#jdkSupportsRecording")
-	void noTestsFailsTheTrainingRunByDefault() throws IOException {
-		// Remove the test so nothing is discovered.
-		java.nio.file.Files.delete(this.projectDir.resolve("src/test/java/sample/SampleTests.java"));
-		write("src/test/java/sample/NotATest.java", """
-				package sample;
+    @Test
+    @EnabledIf("io.github.vpelikh.aot.gradle.AotCacheTrainingPluginFunctionalTests#jdkSupportsRecording")
+    void noTestsFailsTheTrainingRunByDefault() throws IOException {
+        // Remove the test so nothing is discovered.
+        java.nio.file.Files.delete(this.projectDir.resolve("src/test/java/sample/SampleTests.java"));
+        write("src/test/java/sample/NotATest.java", """
+                package sample;
 
-				class NotATest {
-				}
-				""");
+                class NotATest {
+                }
+                """);
 
-		BuildResult result = runner("aotCacheTraining").buildAndFail();
+        BuildResult result = runner("aotCacheTraining").buildAndFail();
 
-		assertThat(result.getOutput()).contains("No tests were discovered");
-	}
+        assertThat(result.getOutput()).contains("No tests were discovered");
+    }
 
-	private GradleRunner runner(String... arguments) {
-		java.util.List<String> args = new java.util.ArrayList<>(java.util.Arrays.asList(arguments));
-		args.add("--stacktrace");
-		return GradleRunner.create()
-			.withProjectDir(this.projectDir.toFile())
-			.withPluginClasspath()
-			.withArguments(args)
-			.forwardOutput();
-	}
+    private GradleRunner runner(String... arguments) {
+        java.util.List<String> args = new java.util.ArrayList<>(java.util.Arrays.asList(arguments));
+        args.add("--stacktrace");
+        return GradleRunner.create()
+            .withProjectDir(this.projectDir.toFile())
+            .withPluginClasspath()
+            .withArguments(args)
+            .forwardOutput();
+    }
 
-	private void write(String relativePath, String content) throws IOException {
-		Path file = this.projectDir.resolve(relativePath);
-		Files.createDirectories(file.getParent());
-		Files.writeString(file, content);
-	}
+    private void write(String relativePath, String content) throws IOException {
+        Path file = this.projectDir.resolve(relativePath);
+        Files.createDirectories(file.getParent());
+        Files.writeString(file, content);
+    }
 
 }

@@ -49,79 +49,79 @@ import static org.assertj.core.api.Assertions.assertThat;
 @EnabledIf("io.github.vpelikh.aot.it.AotCacheRecordingIntegrationTests#jdkSupportsRecording")
 class AotCacheRecordingIntegrationTests {
 
-	static boolean jdkSupportsRecording() {
-		return Runtime.version().feature() >= 25;
-	}
+    static boolean jdkSupportsRecording() {
+        return Runtime.version().feature() >= 25;
+    }
 
-	@Test
-	void recordsAndReusesCacheFromSpringIntegrationTests(@TempDir Path tempDir) throws Exception {
-		Path cacheFile = tempDir.resolve("aot-cache").resolve("application.aot");
-		Files.createDirectories(cacheFile.getParent());
+    @Test
+    void recordsAndReusesCacheFromSpringIntegrationTests(@TempDir Path tempDir) throws Exception {
+        Path cacheFile = tempDir.resolve("aot-cache").resolve("application.aot");
+        Files.createDirectories(cacheFile.getParent());
 
-		// Phase 1: training run records the cache.
-		ProcessResult recording = runJvm(List.of("-XX:AOTCacheOutput=" + cacheFile), TrainingRunMain.class.getName(),
-				List.of());
-		assertThat(recording.exitCode()).as("training run exit code; output:%n%s", recording.output()).isZero();
-		assertThat(cacheFile).as("cache file after training run; output:%n%s", recording.output()).exists();
-		long cacheSize = AotCache.verifyRecordedCache(cacheFile);
-		assertThat(cacheSize).as("recorded cache should be non-empty").isGreaterThan(0);
+        // Phase 1: training run records the cache.
+        ProcessResult recording = runJvm(List.of("-XX:AOTCacheOutput=" + cacheFile), TrainingRunMain.class.getName(),
+                List.of());
+        assertThat(recording.exitCode()).as("training run exit code; output:%n%s", recording.output()).isZero();
+        assertThat(cacheFile).as("cache file after training run; output:%n%s", recording.output()).exists();
+        long cacheSize = AotCache.verifyRecordedCache(cacheFile);
+        assertThat(cacheSize).as("recorded cache should be non-empty").isGreaterThan(0);
 
-		// Phase 2: a fresh JVM must accept (load) the cache. The JVM rejects caches that
-		// do not match the runtime, so a successful run proves compatibility.
-		ProcessResult reuse = runJvm(List.of("-XX:AOTCache=" + cacheFile, "-XX:AOTMode=on"),
-				TrainingRunMain.class.getName(), List.of());
-		assertThat(reuse.exitCode()).as("reuse run exit code; output:%n%s", reuse.output()).isZero();
-		assertThat(reuse.output()).doesNotContain("WARNING: AOT cache could not be loaded");
-	}
+        // Phase 2: a fresh JVM must accept (load) the cache. The JVM rejects caches that
+        // do not match the runtime, so a successful run proves compatibility.
+        ProcessResult reuse = runJvm(List.of("-XX:AOTCache=" + cacheFile, "-XX:AOTMode=on"),
+                TrainingRunMain.class.getName(), List.of());
+        assertThat(reuse.exitCode()).as("reuse run exit code; output:%n%s", reuse.output()).isZero();
+        assertThat(reuse.output()).doesNotContain("WARNING: AOT cache could not be loaded");
+    }
 
-	private ProcessResult runJvm(List<String> jvmArgs, String mainClass, List<String> programArgs) throws IOException {
-		List<String> command = new ArrayList<>();
-		command.add(Path.of(System.getProperty("java.home"), "bin", "java").toString());
-		command.addAll(jvmArgs);
-		command.add("-cp");
-		command.add(jvmClasspath());
-		command.add(mainClass);
-		command.addAll(programArgs);
+    private ProcessResult runJvm(List<String> jvmArgs, String mainClass, List<String> programArgs) throws IOException {
+        List<String> command = new ArrayList<>();
+        command.add(Path.of(System.getProperty("java.home"), "bin", "java").toString());
+        command.addAll(jvmArgs);
+        command.add("-cp");
+        command.add(jvmClasspath());
+        command.add(mainClass);
+        command.addAll(programArgs);
 
-		Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
-		String output = new String(process.getInputStream().readAllBytes());
-		int exitCode;
-		try {
-			exitCode = process.waitFor();
-		}
-		catch (InterruptedException ex) {
-			Thread.currentThread().interrupt();
-			throw new IllegalStateException("Interrupted while waiting for training run", ex);
-		}
-		return new ProcessResult(exitCode, output);
-	}
+        Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+        String output = new String(process.getInputStream().readAllBytes());
+        int exitCode;
+        try {
+            exitCode = process.waitFor();
+        }
+        catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted while waiting for training run", ex);
+        }
+        return new ProcessResult(exitCode, output);
+    }
 
-	/**
-	 * Build a JAR-only classpath for the training JVM.
-	 *
-	 * <p>The JVM only records classes loaded from JARs, so the training classes are
-	 * packaged into a JAR by the build and prepended here. Mocking helpers (Mockito and
-	 * Byte Buddy) are excluded: their self-attaching agents install class-file transformers
-	 * that make the JVM's cache-assembly step fail.
-	 */
-	private String jvmClasspath() {
-		String classesJar = System.getProperty("aot.test.classesJar");
-		String libraries = System.getProperty("aot.test.runtimeClasspath", "");
-		if (classesJar == null) {
-			throw new IllegalStateException("aot.test.classesJar system property is not set");
-		}
-		String filtered = java.util.Arrays.stream(libraries.split(java.io.File.pathSeparator))
-			.filter((entry) -> !isMockingLibrary(entry))
-			.collect(java.util.stream.Collectors.joining(java.io.File.pathSeparator));
-		return filtered.isEmpty() ? classesJar : classesJar + java.io.File.pathSeparator + filtered;
-	}
+    /**
+     * Build a JAR-only classpath for the training JVM.
+     *
+     * <p>The JVM only records classes loaded from JARs, so the training classes are
+     * packaged into a JAR by the build and prepended here. Mocking helpers (Mockito and
+     * Byte Buddy) are excluded: their self-attaching agents install class-file transformers
+     * that make the JVM's cache-assembly step fail.
+     */
+    private String jvmClasspath() {
+        String classesJar = System.getProperty("aot.test.classesJar");
+        String libraries = System.getProperty("aot.test.runtimeClasspath", "");
+        if (classesJar == null) {
+            throw new IllegalStateException("aot.test.classesJar system property is not set");
+        }
+        String filtered = java.util.Arrays.stream(libraries.split(java.io.File.pathSeparator))
+            .filter((entry) -> !isMockingLibrary(entry))
+            .collect(java.util.stream.Collectors.joining(java.io.File.pathSeparator));
+        return filtered.isEmpty() ? classesJar : classesJar + java.io.File.pathSeparator + filtered;
+    }
 
-	private boolean isMockingLibrary(String classpathEntry) {
-		String name = Path.of(classpathEntry).getFileName().toString();
-		return name.startsWith("mockito-") || name.startsWith("byte-buddy") || name.startsWith("objenesis-");
-	}
+    private boolean isMockingLibrary(String classpathEntry) {
+        String name = Path.of(classpathEntry).getFileName().toString();
+        return name.startsWith("mockito-") || name.startsWith("byte-buddy") || name.startsWith("objenesis-");
+    }
 
-	record ProcessResult(int exitCode, String output) {
-	}
+    record ProcessResult(int exitCode, String output) {
+    }
 
 }

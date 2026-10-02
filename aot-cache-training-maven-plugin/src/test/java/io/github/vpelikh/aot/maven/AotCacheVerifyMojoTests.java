@@ -35,58 +35,58 @@ import static org.assertj.core.api.Assertions.assertThatExceptionOfType;
  */
 class AotCacheVerifyMojoTests {
 
-	@Test
-	void doesNothingWhenDisabled(@TempDir Path basedir) throws Exception {
-		AotCacheVerifyMojo mojo = mojo(basedir);
-		mojo.setEnabled(false);
-		mojo.execute();
-	}
+    @Test
+    void doesNothingWhenDisabled(@TempDir Path basedir) throws Exception {
+        AotCacheVerifyMojo mojo = mojo(basedir);
+        mojo.setEnabled(false);
+        mojo.execute();
+    }
 
-	@Test
-	void failsClosedWhenEnabledAndCacheMissing(@TempDir Path basedir) {
-		AotCacheVerifyMojo mojo = mojo(basedir);
-		mojo.setEnabled(true);
+    @Test
+    void failsClosedWhenEnabledAndCacheMissing(@TempDir Path basedir) {
+        AotCacheVerifyMojo mojo = mojo(basedir);
+        mojo.setEnabled(true);
 
-		assertThatExceptionOfType(MojoExecutionException.class).isThrownBy(mojo::execute)
-			.withMessageContaining("no non-empty cache");
-	}
+        assertThatExceptionOfType(MojoExecutionException.class).isThrownBy(mojo::execute)
+            .withMessageContaining("no non-empty cache");
+    }
 
-	@Test
-	void failsClosedWhenEnabledAndCacheEmpty(@TempDir Path basedir) throws Exception {
-		AotCacheVerifyMojo mojo = mojo(basedir);
-		mojo.setEnabled(true);
-		Path cacheFile = mojo.resolveCacheFile();
-		Files.createDirectories(cacheFile.getParent());
-		Files.createFile(cacheFile);
+    @Test
+    void failsClosedWhenEnabledAndCacheEmpty(@TempDir Path basedir) throws Exception {
+        AotCacheVerifyMojo mojo = mojo(basedir);
+        mojo.setEnabled(true);
+        Path cacheFile = mojo.resolveCacheFile();
+        Files.createDirectories(cacheFile.getParent());
+        Files.createFile(cacheFile);
 
-		assertThatExceptionOfType(MojoExecutionException.class).isThrownBy(mojo::execute)
-			.withMessageContaining("no non-empty cache");
-	}
+        assertThatExceptionOfType(MojoExecutionException.class).isThrownBy(mojo::execute)
+            .withMessageContaining("no non-empty cache");
+    }
 
-	@Test
-	void passesWhenCacheRecorded(@TempDir Path basedir) throws Exception {
-		AotCacheVerifyMojo mojo = mojo(basedir);
-		mojo.setEnabled(true);
-		Path cacheFile = mojo.resolveCacheFile();
-		Files.createDirectories(cacheFile.getParent());
-		Files.writeString(cacheFile, "recorded-cache-bytes");
+    @Test
+    void passesWhenCacheRecorded(@TempDir Path basedir) throws Exception {
+        AotCacheVerifyMojo mojo = mojo(basedir);
+        mojo.setEnabled(true);
+        Path cacheFile = mojo.resolveCacheFile();
+        Files.createDirectories(cacheFile.getParent());
+        Files.writeString(cacheFile, "recorded-cache-bytes");
 
-		mojo.execute();
+        mojo.execute();
 
-		assertThat(cacheFile).exists();
-	}
+        assertThat(cacheFile).exists();
+    }
 
-	private AotCacheVerifyMojo mojo(Path basedir) {
-		MavenProject project = new MavenProject();
-		project.setFile(basedir.resolve("pom.xml").toFile());
-		Build build = new Build();
-		build.setDirectory("target");
-		project.getModel().setBuild(build);
-		project.getModel().setProperties(new java.util.Properties());
-		project.setBuild(build);
-		AotCacheVerifyMojo mojo = new AotCacheVerifyMojo();
-		mojo.setProject(project);
-		return mojo;
-	}
+    private AotCacheVerifyMojo mojo(Path basedir) {
+        MavenProject project = new MavenProject();
+        project.setFile(basedir.resolve("pom.xml").toFile());
+        Build build = new Build();
+        build.setDirectory("target");
+        project.getModel().setBuild(build);
+        project.getModel().setProperties(new java.util.Properties());
+        project.setBuild(build);
+        AotCacheVerifyMojo mojo = new AotCacheVerifyMojo();
+        mojo.setProject(project);
+        return mojo;
+    }
 
 }

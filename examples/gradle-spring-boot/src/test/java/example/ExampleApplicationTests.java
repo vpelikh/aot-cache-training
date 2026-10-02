@@ -14,17 +14,17 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringBootTest
 class ExampleApplicationTests {
 
-	@Autowired
-	private ExampleApplication application;
+    @Autowired
+    private ExampleApplication application;
 
-	@Test
-	void contextLoads() {
-		assertThat(this.application).isNotNull();
-	}
+    @Test
+    void contextLoads() {
+        assertThat(this.application).isNotNull();
+    }
 
-	@Test
-	void greets() {
-		assertThat(this.application.hello()).isEqualTo("Hello!");
-	}
+    @Test
+    void greets() {
+        assertThat(this.application.hello()).isEqualTo("Hello!");
+    }
 
 }

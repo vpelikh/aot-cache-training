@@ -29,20 +29,20 @@ import org.springframework.context.annotation.Configuration;
 @Configuration(proxyBeanMethods = false)
 public class TrainingApplication {
 
-	@Bean
-	public GreetingService greetingService() {
-		return new GreetingService();
-	}
+    @Bean
+    public GreetingService greetingService() {
+        return new GreetingService();
+    }
 
-	/**
-	 * A trivial service whose initialization is captured during the training run.
-	 */
-	public static class GreetingService {
+    /**
+     * A trivial service whose initialization is captured during the training run.
+     */
+    public static class GreetingService {
 
-		public String greet(String name) {
-			return "Hello, " + name + "!";
-		}
+        public String greet(String name) {
+            return "Hello, " + name + "!";
+        }
 
-	}
+    }
 
 }

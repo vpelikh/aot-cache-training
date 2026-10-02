@@ -41,113 +41,113 @@ import static org.assertj.core.api.Assertions.assertThat;
 @EnabledIf("io.github.vpelikh.aot.trainer.TrainingLauncherIntegrationTests#jdkSupportsRecording")
 class TrainingLauncherIntegrationTests {
 
-	static boolean jdkSupportsRecording() {
-		return Runtime.version().feature() >= 25;
-	}
+    static boolean jdkSupportsRecording() {
+        return Runtime.version().feature() >= 25;
+    }
 
-	@Test
-	void recordsAndReusesCacheOnJarOnlyClasspath(@TempDir Path tempDir) throws Exception {
-		Path cacheFile = tempDir.resolve("aot-cache").resolve("application.aot");
-		Files.createDirectories(cacheFile.getParent());
+    @Test
+    void recordsAndReusesCacheOnJarOnlyClasspath(@TempDir Path tempDir) throws Exception {
+        Path cacheFile = tempDir.resolve("aot-cache").resolve("application.aot");
+        Files.createDirectories(cacheFile.getParent());
 
-		ProcessResult recording = runJvm(List.of("-XX:AOTCacheOutput=" + cacheFile),
-				List.of("--select-class", SampleTrainingTests.class.getName()));
-		assertThat(recording.exitCode()).as("training run exit code; output:%n%s", recording.output()).isZero();
-		assertThat(recording.output()).contains("1 tests successful");
-		assertThat(cacheFile).as("cache file after training run; output:%n%s", recording.output()).exists();
-		assertThat(AotCache.verifyRecordedCache(cacheFile)).isGreaterThan(0);
+        ProcessResult recording = runJvm(List.of("-XX:AOTCacheOutput=" + cacheFile),
+                List.of("--select-class", SampleTrainingTests.class.getName()));
+        assertThat(recording.exitCode()).as("training run exit code; output:%n%s", recording.output()).isZero();
+        assertThat(recording.output()).contains("1 tests successful");
+        assertThat(cacheFile).as("cache file after training run; output:%n%s", recording.output()).exists();
+        assertThat(AotCache.verifyRecordedCache(cacheFile)).isGreaterThan(0);
 
-		// A fresh JVM must accept (load) the cache; the JVM rejects caches that do not
-		// match the runtime and class path, so a successful run proves compatibility.
-		ProcessResult reuse = runJvm(List.of("-XX:AOTCache=" + cacheFile, "-XX:AOTMode=on"),
-				List.of("--select-class", SampleTrainingTests.class.getName()));
-		assertThat(reuse.exitCode()).as("reuse run exit code; output:%n%s", reuse.output()).isZero();
-	}
+        // A fresh JVM must accept (load) the cache; the JVM rejects caches that do not
+        // match the runtime and class path, so a successful run proves compatibility.
+        ProcessResult reuse = runJvm(List.of("-XX:AOTCache=" + cacheFile, "-XX:AOTMode=on"),
+                List.of("--select-class", SampleTrainingTests.class.getName()));
+        assertThat(reuse.exitCode()).as("reuse run exit code; output:%n%s", reuse.output()).isZero();
+    }
 
-	@Test
-	void failsWhenNoTestsAreDiscovered(@TempDir Path tempDir) throws Exception {
-		Path cacheFile = tempDir.resolve("aot-cache").resolve("application.aot");
-		Files.createDirectories(cacheFile.getParent());
+    @Test
+    void failsWhenNoTestsAreDiscovered(@TempDir Path tempDir) throws Exception {
+        Path cacheFile = tempDir.resolve("aot-cache").resolve("application.aot");
+        Files.createDirectories(cacheFile.getParent());
 
-		ProcessResult result = runJvm(List.of("-XX:AOTCacheOutput=" + cacheFile),
-				List.of("--select-package", "does.not.exist"));
-		assertThat(result.exitCode()).as("output:%n%s", result.output()).isEqualTo(2);
-		assertThat(result.output()).contains("No tests were discovered");
-	}
+        ProcessResult result = runJvm(List.of("-XX:AOTCacheOutput=" + cacheFile),
+                List.of("--select-package", "does.not.exist"));
+        assertThat(result.exitCode()).as("output:%n%s", result.output()).isEqualTo(2);
+        assertThat(result.output()).contains("No tests were discovered");
+    }
 
-	@Test
-	void failsWithClearMessageWhenNoTestEngineIsPresent(@TempDir Path tempDir) throws Exception {
-		Path cacheFile = tempDir.resolve("aot-cache").resolve("application.aot");
-		Files.createDirectories(cacheFile.getParent());
+    @Test
+    void failsWithClearMessageWhenNoTestEngineIsPresent(@TempDir Path tempDir) throws Exception {
+        Path cacheFile = tempDir.resolve("aot-cache").resolve("application.aot");
+        Files.createDirectories(cacheFile.getParent());
 
-		// Start a JVM whose class path has the launcher but no test engine.
-		List<String> command = new ArrayList<>();
-		command.add(Path.of(System.getProperty("java.home"), "bin", "java").toString());
-		command.add("-XX:AOTCacheOutput=" + cacheFile);
-		command.add("-cp");
-		command.add(launcherAndPlatformOnly());
-		command.add(TrainingLauncher.class.getName());
-		Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
-		String output = new String(process.getInputStream().readAllBytes());
-		int exitCode = process.waitFor();
+        // Start a JVM whose class path has the launcher but no test engine.
+        List<String> command = new ArrayList<>();
+        command.add(Path.of(System.getProperty("java.home"), "bin", "java").toString());
+        command.add("-XX:AOTCacheOutput=" + cacheFile);
+        command.add("-cp");
+        command.add(launcherAndPlatformOnly());
+        command.add(TrainingLauncher.class.getName());
+        Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+        String output = new String(process.getInputStream().readAllBytes());
+        int exitCode = process.waitFor();
 
-		assertThat(exitCode).as("output:%n%s", output).isEqualTo(2);
-		assertThat(output).contains("No JUnit test engine was found");
-	}
+        assertThat(exitCode).as("output:%n%s", output).isEqualTo(2);
+        assertThat(output).contains("No JUnit test engine was found");
+    }
 
-	/**
-	 * A class path with the launcher and JUnit Platform but no engine, so launcher creation
-	 * fails.
-	 */
-	private String launcherAndPlatformOnly() throws IOException {
-		List<String> kept = new ArrayList<>();
-		kept.add(System.getProperty("aot.test.classesJar"));
-		kept.add(System.getProperty("aot.test.coreJar"));
-		for (String entry : System.getProperty("aot.test.runtimeClasspath", "").split(File.pathSeparator)) {
-			if (entry.contains("junit-platform-") || entry.contains("opentest4j") || entry.contains("apiguardian")) {
-				kept.add(entry);
-			}
-		}
-		return String.join(File.pathSeparator, kept);
-	}
+    /**
+     * A class path with the launcher and JUnit Platform but no engine, so launcher creation
+     * fails.
+     */
+    private String launcherAndPlatformOnly() throws IOException {
+        List<String> kept = new ArrayList<>();
+        kept.add(System.getProperty("aot.test.classesJar"));
+        kept.add(System.getProperty("aot.test.coreJar"));
+        for (String entry : System.getProperty("aot.test.runtimeClasspath", "").split(File.pathSeparator)) {
+            if (entry.contains("junit-platform-") || entry.contains("opentest4j") || entry.contains("apiguardian")) {
+                kept.add(entry);
+            }
+        }
+        return String.join(File.pathSeparator, kept);
+    }
 
-	private ProcessResult runJvm(List<String> jvmArgs, List<String> programArgs) throws IOException {
-		List<String> command = new ArrayList<>();
-		command.add(Path.of(System.getProperty("java.home"), "bin", "java").toString());
-		command.addAll(jvmArgs);
-		command.add("-cp");
-		command.add(jvmClasspath());
-		command.add(TrainingLauncher.class.getName());
-		command.addAll(programArgs);
+    private ProcessResult runJvm(List<String> jvmArgs, List<String> programArgs) throws IOException {
+        List<String> command = new ArrayList<>();
+        command.add(Path.of(System.getProperty("java.home"), "bin", "java").toString());
+        command.addAll(jvmArgs);
+        command.add("-cp");
+        command.add(jvmClasspath());
+        command.add(TrainingLauncher.class.getName());
+        command.addAll(programArgs);
 
-		Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
-		String output = new String(process.getInputStream().readAllBytes());
-		int exitCode;
-		try {
-			exitCode = process.waitFor();
-		}
-		catch (InterruptedException ex) {
-			Thread.currentThread().interrupt();
-			throw new IllegalStateException("Interrupted while waiting for training run", ex);
-		}
-		return new ProcessResult(exitCode, output);
-	}
+        Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+        String output = new String(process.getInputStream().readAllBytes());
+        int exitCode;
+        try {
+            exitCode = process.waitFor();
+        }
+        catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new IllegalStateException("Interrupted while waiting for training run", ex);
+        }
+        return new ProcessResult(exitCode, output);
+    }
 
-	private String jvmClasspath() {
-		String classesJar = System.getProperty("aot.test.classesJar");
-		String coreJar = System.getProperty("aot.test.coreJar");
-		String libraries = System.getProperty("aot.test.runtimeClasspath", "");
-		if (classesJar == null || coreJar == null) {
-			throw new IllegalStateException("aot.test.classesJar / aot.test.coreJar system properties are not set");
-		}
-		StringBuilder classpath = new StringBuilder(classesJar).append(File.pathSeparator).append(coreJar);
-		if (!libraries.isEmpty()) {
-			classpath.append(File.pathSeparator).append(libraries);
-		}
-		return classpath.toString();
-	}
+    private String jvmClasspath() {
+        String classesJar = System.getProperty("aot.test.classesJar");
+        String coreJar = System.getProperty("aot.test.coreJar");
+        String libraries = System.getProperty("aot.test.runtimeClasspath", "");
+        if (classesJar == null || coreJar == null) {
+            throw new IllegalStateException("aot.test.classesJar / aot.test.coreJar system properties are not set");
+        }
+        StringBuilder classpath = new StringBuilder(classesJar).append(File.pathSeparator).append(coreJar);
+        if (!libraries.isEmpty()) {
+            classpath.append(File.pathSeparator).append(libraries);
+        }
+        return classpath.toString();
+    }
 
-	record ProcessResult(int exitCode, String output) {
-	}
+    record ProcessResult(int exitCode, String output) {
+    }
 
 }

@@ -40,101 +40,101 @@ import static org.mockito.Mockito.verify;
  */
 class AotCacheTestExecutionListenerTests {
 
-	private final AotCacheTestExecutionListener listener = new AotCacheTestExecutionListener();
+    private final AotCacheTestExecutionListener listener = new AotCacheTestExecutionListener();
 
-	@AfterEach
-	void clearProperties() {
-		SpringProperties.setProperty(DefaultLifecycleProcessor.EXIT_PROPERTY_NAME, null);
-	}
+    @AfterEach
+    void clearProperties() {
+        SpringProperties.setProperty(DefaultLifecycleProcessor.EXIT_PROPERTY_NAME, null);
+    }
 
-	@Test
-	void orderValue() {
-		assertThat(listener.getOrder()).isEqualTo(AotCacheTestExecutionListener.ORDER);
-	}
+    @Test
+    void orderValue() {
+        assertThat(listener.getOrder()).isEqualTo(AotCacheTestExecutionListener.ORDER);
+    }
 
-	@Test
-	void beforeTestClassWhenRecordingIsNotEnabled() throws Exception {
-		TestContext testContext = mock();
-		listener.beforeTestClass(testContext);
-		verify(testContext, never()).getApplicationContext();
-	}
+    @Test
+    void beforeTestClassWhenRecordingIsNotEnabled() throws Exception {
+        TestContext testContext = mock();
+        listener.beforeTestClass(testContext);
+        verify(testContext, never()).getApplicationContext();
+    }
 
-	@Test
-	void beforeTestClassWhenRecordingIsEnabledInitializesContext() throws Exception {
-		ApplicationContext applicationContext = mock();
-		TestContext testContext = mock();
-		given((Class) testContext.getTestClass()).willReturn((Class) AotCacheTestExecutionListenerTests.class);
-		given(testContext.getApplicationContext()).willReturn(applicationContext);
+    @Test
+    void beforeTestClassWhenRecordingIsEnabledInitializesContext() throws Exception {
+        ApplicationContext applicationContext = mock();
+        TestContext testContext = mock();
+        given((Class) testContext.getTestClass()).willReturn((Class) AotCacheTestExecutionListenerTests.class);
+        given(testContext.getApplicationContext()).willReturn(applicationContext);
 
-		listenerWithArgs("-XX:AOTCacheOutput=build/app.aot").beforeTestClass(testContext);
+        listenerWithArgs("-XX:AOTCacheOutput=build/app.aot").beforeTestClass(testContext);
 
-		verify(testContext).getApplicationContext();
-	}
+        verify(testContext).getApplicationContext();
+    }
 
-	@Test
-	void beforeTestClassWhenJdkVersionIsUnsupported() {
-		AotCacheTestExecutionListener unsupportedListener = new AotCacheTestExecutionListener() {
-			@Override
-			protected List<String> getInputArguments() {
-				return List.of("-XX:AOTCacheOutput=build/app.aot");
-			}
+    @Test
+    void beforeTestClassWhenJdkVersionIsUnsupported() {
+        AotCacheTestExecutionListener unsupportedListener = new AotCacheTestExecutionListener() {
+            @Override
+            protected List<String> getInputArguments() {
+                return List.of("-XX:AOTCacheOutput=build/app.aot");
+            }
 
-			@Override
-			protected int getRequiredJavaFeatureVersion() {
-				return 9999;
-			}
-		};
-		TestContext testContext = mock();
-		given((Class) testContext.getTestClass()).willReturn((Class) AotCacheTestExecutionListenerTests.class);
+            @Override
+            protected int getRequiredJavaFeatureVersion() {
+                return 9999;
+            }
+        };
+        TestContext testContext = mock();
+        given((Class) testContext.getTestClass()).willReturn((Class) AotCacheTestExecutionListenerTests.class);
 
-		assertThatIllegalStateException().isThrownBy(() -> unsupportedListener.beforeTestClass(testContext))
-			.withMessageContaining("JDK");
-		verify(testContext, never()).getApplicationContext();
-	}
+        assertThatIllegalStateException().isThrownBy(() -> unsupportedListener.beforeTestClass(testContext))
+            .withMessageContaining("JDK");
+        verify(testContext, never()).getApplicationContext();
+    }
 
-	@Test
-	void beforeTestClassWhenClassLoaderIsNotStandardStillInitializesContext() throws Exception {
-		AotCacheTestExecutionListener warnListener = new AotCacheTestExecutionListener() {
-			@Override
-			protected List<String> getInputArguments() {
-				return List.of("-XX:AOTCacheOutput=build/app.aot");
-			}
+    @Test
+    void beforeTestClassWhenClassLoaderIsNotStandardStillInitializesContext() throws Exception {
+        AotCacheTestExecutionListener warnListener = new AotCacheTestExecutionListener() {
+            @Override
+            protected List<String> getInputArguments() {
+                return List.of("-XX:AOTCacheOutput=build/app.aot");
+            }
 
-			@Override
-			protected boolean isStandardClassLoader(ClassLoader classLoader) {
-				return false;
-			}
-		};
-		ApplicationContext applicationContext = mock();
-		given(applicationContext.getClassLoader()).willReturn(AotCacheTestExecutionListenerTests.class.getClassLoader());
-		TestContext testContext = mock();
-		given((Class) testContext.getTestClass()).willReturn((Class) AotCacheTestExecutionListenerTests.class);
-		given(testContext.getApplicationContext()).willReturn(applicationContext);
+            @Override
+            protected boolean isStandardClassLoader(ClassLoader classLoader) {
+                return false;
+            }
+        };
+        ApplicationContext applicationContext = mock();
+        given(applicationContext.getClassLoader()).willReturn(AotCacheTestExecutionListenerTests.class.getClassLoader());
+        TestContext testContext = mock();
+        given((Class) testContext.getTestClass()).willReturn((Class) AotCacheTestExecutionListenerTests.class);
+        given(testContext.getApplicationContext()).willReturn(applicationContext);
 
-		warnListener.beforeTestClass(testContext);
+        warnListener.beforeTestClass(testContext);
 
-		verify(testContext).getApplicationContext();
-	}
+        verify(testContext).getApplicationContext();
+    }
 
-	@Test
-	void isExitOnRefreshConfiguredWhenPropertyIsSet() {
-		SpringProperties.setProperty(DefaultLifecycleProcessor.EXIT_PROPERTY_NAME, "onRefresh");
-		assertThat(listener.isExitOnRefreshConfigured()).isTrue();
-	}
+    @Test
+    void isExitOnRefreshConfiguredWhenPropertyIsSet() {
+        SpringProperties.setProperty(DefaultLifecycleProcessor.EXIT_PROPERTY_NAME, "onRefresh");
+        assertThat(listener.isExitOnRefreshConfigured()).isTrue();
+    }
 
-	@Test
-	void isExitOnRefreshConfiguredWhenPropertyIsNotSet() {
-		assertThat(listener.isExitOnRefreshConfigured()).isFalse();
-	}
+    @Test
+    void isExitOnRefreshConfiguredWhenPropertyIsNotSet() {
+        assertThat(listener.isExitOnRefreshConfigured()).isFalse();
+    }
 
-	private AotCacheTestExecutionListener listenerWithArgs(String... args) {
-		List<String> inputArgs = List.of(args);
-		return new AotCacheTestExecutionListener() {
-			@Override
-			protected List<String> getInputArguments() {
-				return inputArgs;
-			}
-		};
-	}
+    private AotCacheTestExecutionListener listenerWithArgs(String... args) {
+        List<String> inputArgs = List.of(args);
+        return new AotCacheTestExecutionListener() {
+            @Override
+            protected List<String> getInputArguments() {
+                return inputArgs;
+            }
+        };
+    }
 
 }

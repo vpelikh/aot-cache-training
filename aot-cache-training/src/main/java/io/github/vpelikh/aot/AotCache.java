@@ -49,105 +49,105 @@ import org.jspecify.annotations.Nullable;
  */
 public final class AotCache {
 
-	/**
-	 * The JVM flag that enables single-step AOT cache recording.
-	 */
-	public static final String OUTPUT_FLAG = "-XX:AOTCacheOutput=";
+    /**
+     * The JVM flag that enables single-step AOT cache recording.
+     */
+    public static final String OUTPUT_FLAG = "-XX:AOTCacheOutput=";
 
-	/**
-	 * The minimum JDK feature version that supports single-step recording (JDK 25, JEP 514).
-	 */
-	public static final int MINIMUM_RECORDING_JDK = 25;
+    /**
+     * The minimum JDK feature version that supports single-step recording (JDK 25, JEP 514).
+     */
+    public static final int MINIMUM_RECORDING_JDK = 25;
 
-	/**
-	 * The conventional file name of a recorded cache within an {@code aot-cache} directory.
-	 */
-	public static final String CACHE_FILE_NAME = "application.aot";
+    /**
+     * The conventional file name of a recorded cache within an {@code aot-cache} directory.
+     */
+    public static final String CACHE_FILE_NAME = "application.aot";
 
-	/**
-	 * The conventional directory that holds a recorded cache, relative to the build
-	 * output or application content.
-	 */
-	public static final String CACHE_DIRECTORY = "aot-cache";
+    /**
+     * The conventional directory that holds a recorded cache, relative to the build
+     * output or application content.
+     */
+    public static final String CACHE_DIRECTORY = "aot-cache";
 
-	private AotCache() {
-	}
+    private AotCache() {
+    }
 
-	/**
-	 * Return {@code true} if the given JVM input arguments enable single-step AOT cache
-	 * recording.
-	 * @param jvmArguments the JVM command-line arguments
-	 * @return {@code true} if {@value #OUTPUT_FLAG} is present
-	 */
-	public static boolean isRecordingEnabled(List<String> jvmArguments) {
-		return findOutputPath(jvmArguments) != null;
-	}
+    /**
+     * Return {@code true} if the given JVM input arguments enable single-step AOT cache
+     * recording.
+     * @param jvmArguments the JVM command-line arguments
+     * @return {@code true} if {@value #OUTPUT_FLAG} is present
+     */
+    public static boolean isRecordingEnabled(List<String> jvmArguments) {
+        return findOutputPath(jvmArguments) != null;
+    }
 
-	/**
-	 * Find the AOT cache output path configured on the given JVM input arguments.
-	 * @param jvmArguments the JVM command-line arguments
-	 * @return the configured output path, or {@code null} if recording is not enabled
-	 */
-	public static @Nullable String findOutputPath(List<String> jvmArguments) {
-		for (String argument : jvmArguments) {
-			if (argument.startsWith(OUTPUT_FLAG)) {
-				String value = argument.substring(OUTPUT_FLAG.length()).trim();
-				if (!value.isEmpty()) {
-					return value;
-				}
-			}
-		}
-		return null;
-	}
+    /**
+     * Find the AOT cache output path configured on the given JVM input arguments.
+     * @param jvmArguments the JVM command-line arguments
+     * @return the configured output path, or {@code null} if recording is not enabled
+     */
+    public static @Nullable String findOutputPath(List<String> jvmArguments) {
+        for (String argument : jvmArguments) {
+            if (argument.startsWith(OUTPUT_FLAG)) {
+                String value = argument.substring(OUTPUT_FLAG.length()).trim();
+                if (!value.isEmpty()) {
+                    return value;
+                }
+            }
+        }
+        return null;
+    }
 
-	/**
-	 * Return the JVM input arguments of the current process, excluding arguments passed
-	 * to the main method.
-	 * @return the current JVM input arguments
-	 */
-	public static List<String> currentJvmArguments() {
-		return ManagementFactory.getRuntimeMXBean().getInputArguments();
-	}
+    /**
+     * Return the JVM input arguments of the current process, excluding arguments passed
+     * to the main method.
+     * @return the current JVM input arguments
+     */
+    public static List<String> currentJvmArguments() {
+        return ManagementFactory.getRuntimeMXBean().getInputArguments();
+    }
 
-	/**
-	 * Resolve the conventional cache file path within the given build output directory.
-	 * @param buildOutputDirectory the build output directory (for example {@code build/}
-	 * or {@code target/})
-	 * @return the path to {@code <buildOutputDirectory>/aot-cache/application.aot}
-	 */
-	public static Path defaultCacheFile(Path buildOutputDirectory) {
-		return buildOutputDirectory.resolve(CACHE_DIRECTORY).resolve(CACHE_FILE_NAME);
-	}
+    /**
+     * Resolve the conventional cache file path within the given build output directory.
+     * @param buildOutputDirectory the build output directory (for example {@code build/}
+     * or {@code target/})
+     * @return the path to {@code <buildOutputDirectory>/aot-cache/application.aot}
+     */
+    public static Path defaultCacheFile(Path buildOutputDirectory) {
+        return buildOutputDirectory.resolve(CACHE_DIRECTORY).resolve(CACHE_FILE_NAME);
+    }
 
-	/**
-	 * Build the JVM argument that enables recording to the given path.
-	 * @param outputPath the cache output path
-	 * @return the {@value #OUTPUT_FLAG} argument
-	 */
-	public static String recordingArgument(Path outputPath) {
-		return OUTPUT_FLAG + outputPath.toAbsolutePath();
-	}
+    /**
+     * Build the JVM argument that enables recording to the given path.
+     * @param outputPath the cache output path
+     * @return the {@value #OUTPUT_FLAG} argument
+     */
+    public static String recordingArgument(Path outputPath) {
+        return OUTPUT_FLAG + outputPath.toAbsolutePath();
+    }
 
-	/**
-	 * Verify that a cache was recorded at the given path.
-	 *
-	 * <p>This must be called by build tooling <em>after</em> the test JVM has exited: the
-	 * JVM assembles the final cache only after shutdown hooks have run, so a check from
-	 * within the test JVM (for example, a shutdown hook) would always report a missing
-	 * cache.
-	 * @param cacheFile the expected cache file
-	 * @return the size of the recorded cache in bytes, or {@code -1} if it was not recorded
-	 */
-	public static long verifyRecordedCache(Path cacheFile) {
-		if (Files.isRegularFile(cacheFile)) {
-			try {
-				return Files.size(cacheFile);
-			}
-			catch (IOException ex) {
-				return -1;
-			}
-		}
-		return -1;
-	}
+    /**
+     * Verify that a cache was recorded at the given path.
+     *
+     * <p>This must be called by build tooling <em>after</em> the test JVM has exited: the
+     * JVM assembles the final cache only after shutdown hooks have run, so a check from
+     * within the test JVM (for example, a shutdown hook) would always report a missing
+     * cache.
+     * @param cacheFile the expected cache file
+     * @return the size of the recorded cache in bytes, or {@code -1} if it was not recorded
+     */
+    public static long verifyRecordedCache(Path cacheFile) {
+        if (Files.isRegularFile(cacheFile)) {
+            try {
+                return Files.size(cacheFile);
+            }
+            catch (IOException ex) {
+                return -1;
+            }
+        }
+        return -1;
+    }
 
 }

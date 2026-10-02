@@ -38,38 +38,38 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class AotCacheListenerRegistrationTests {
 
-	@Test
-	void thisJarDeclaresTheListener() throws IOException {
-		try (InputStream input = getClass().getResourceAsStream("/META-INF/spring.factories")) {
-			assertThat(input).as("META-INF/spring.factories must be on the class path").isNotNull();
-			Properties properties = new Properties();
-			properties.load(input);
-			String value = properties.getProperty(TestExecutionListener.class.getName());
-			assertThat(value).isNotNull().contains(AotCacheTestExecutionListener.class.getName());
-		}
-	}
+    @Test
+    void thisJarDeclaresTheListener() throws IOException {
+        try (InputStream input = getClass().getResourceAsStream("/META-INF/spring.factories")) {
+            assertThat(input).as("META-INF/spring.factories must be on the class path").isNotNull();
+            Properties properties = new Properties();
+            properties.load(input);
+            String value = properties.getProperty(TestExecutionListener.class.getName());
+            assertThat(value).isNotNull().contains(AotCacheTestExecutionListener.class.getName());
+        }
+    }
 
-	@Test
-	void springDiscoversTheListenerAmongClasspathFactories() throws IOException {
-		// Mirror how the SpringFactoriesLoader finds properties files: scan every
-		// META-INF/spring.factories on the class path and confirm ours registers the
-		// listener under the TestExecutionListener key.
-		Enumeration<URL> resources = getClass().getClassLoader().getResources("META-INF/spring.factories");
-		List<String> declared = new ArrayList<>();
-		while (resources.hasMoreElements()) {
-			URL url = resources.nextElement();
-			Properties properties = new Properties();
-			try (InputStream input = url.openStream()) {
-				properties.load(input);
-			}
-			String value = properties.getProperty(TestExecutionListener.class.getName());
-			if (value != null) {
-				declared.addAll(List.of(value.split(",")));
-			}
-		}
-		assertThat(declared).map(String::trim)
-			.as("AotCacheTestExecutionListener should be registered by default")
-			.contains(AotCacheTestExecutionListener.class.getName());
-	}
+    @Test
+    void springDiscoversTheListenerAmongClasspathFactories() throws IOException {
+        // Mirror how the SpringFactoriesLoader finds properties files: scan every
+        // META-INF/spring.factories on the class path and confirm ours registers the
+        // listener under the TestExecutionListener key.
+        Enumeration<URL> resources = getClass().getClassLoader().getResources("META-INF/spring.factories");
+        List<String> declared = new ArrayList<>();
+        while (resources.hasMoreElements()) {
+            URL url = resources.nextElement();
+            Properties properties = new Properties();
+            try (InputStream input = url.openStream()) {
+                properties.load(input);
+            }
+            String value = properties.getProperty(TestExecutionListener.class.getName());
+            if (value != null) {
+                declared.addAll(List.of(value.split(",")));
+            }
+        }
+        assertThat(declared).map(String::trim)
+            .as("AotCacheTestExecutionListener should be registered by default")
+            .contains(AotCacheTestExecutionListener.class.getName());
+    }
 
 }

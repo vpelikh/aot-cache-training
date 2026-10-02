@@ -31,39 +31,39 @@ import org.gradle.api.provider.Property;
  */
 public abstract class AotCacheTrainingExtension {
 
-	/**
-	 * Create the extension. Gradle instantiates it and injects the managed properties.
-	 */
-	public AotCacheTrainingExtension() {
-	}
+    /**
+     * Create the extension. Gradle instantiates it and injects the managed properties.
+     */
+    public AotCacheTrainingExtension() {
+    }
 
-	/**
-	 * Whether AOT cache recording is enabled. Defaults to {@code false} so the plugin is
-	 * inert until a user opts in.
-	 * @return the enabled property
-	 */
-	public abstract Property<Boolean> getEnabled();
+    /**
+     * Whether AOT cache recording is enabled. Defaults to {@code false} so the plugin is
+     * inert until a user opts in.
+     * @return the enabled property
+     */
+    public abstract Property<Boolean> getEnabled();
 
-	/**
-	 * Packages whose tests form the training workload. When empty, the whole test class
-	 * path is scanned.
-	 * @return the packages to scan
-	 */
-	public abstract ListProperty<String> getPackagesToScan();
+    /**
+     * Packages whose tests form the training workload. When empty, the whole test class
+     * path is scanned.
+     * @return the packages to scan
+     */
+    public abstract ListProperty<String> getPackagesToScan();
 
-	/**
-	 * Whether a failing test should fail the training run. Defaults to {@code true}; use
-	 * {@code false} to record a cache even when some integration tests fail.
-	 * @return the fail-on-test-failure property
-	 */
-	public abstract Property<Boolean> getFailOnTestFailure();
+    /**
+     * Whether a failing test should fail the training run. Defaults to {@code true}; use
+     * {@code false} to record a cache even when some integration tests fail.
+     * @return the fail-on-test-failure property
+     */
+    public abstract Property<Boolean> getFailOnTestFailure();
 
-	/**
-	 * Whether to record a cache even when the training run discovers no tests. Defaults to
-	 * {@code false}, because an empty workload records a large but useless cache and is
-	 * almost always a misconfiguration.
-	 * @return the allow-empty-workload property
-	 */
-	public abstract Property<Boolean> getAllowEmptyWorkload();
+    /**
+     * Whether to record a cache even when the training run discovers no tests. Defaults to
+     * {@code false}, because an empty workload records a large but useless cache and is
+     * almost always a misconfiguration.
+     * @return the allow-empty-workload property
+     */
+    public abstract Property<Boolean> getAllowEmptyWorkload();
 
 }

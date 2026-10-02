@@ -67,125 +67,125 @@ import org.springframework.test.context.support.AbstractTestExecutionListener;
  */
 public class AotCacheTestExecutionListener extends AbstractTestExecutionListener {
 
-	/**
-	 * Create a listener that prepares the training workload when AOT cache recording is
-	 * enabled. Registration is a no-op otherwise.
-	 */
-	public AotCacheTestExecutionListener() {
-	}
+    /**
+     * Create a listener that prepares the training workload when AOT cache recording is
+     * enabled. Registration is a no-op otherwise.
+     */
+    public AotCacheTestExecutionListener() {
+    }
 
-	/**
-	 * The {@link #getOrder() order} value for this listener. Ordered after
-	 * {@code CommonCachesTestExecutionListener} (3005) and before
-	 * {@code TransactionalTestExecutionListener} (4000).
-	 */
-	public static final int ORDER = 3006;
+    /**
+     * The {@link #getOrder() order} value for this listener. Ordered after
+     * {@code CommonCachesTestExecutionListener} (3005) and before
+     * {@code TransactionalTestExecutionListener} (4000).
+     */
+    public static final int ORDER = 3006;
 
-	private static final Log logger = LogFactory.getLog(AotCacheTestExecutionListener.class);
+    private static final Log logger = LogFactory.getLog(AotCacheTestExecutionListener.class);
 
-	@Override
-	public final int getOrder() {
-		return ORDER;
-	}
+    @Override
+    public final int getOrder() {
+        return ORDER;
+    }
 
-	@Override
-	public void beforeTestClass(TestContext testContext) throws Exception {
-		List<String> jvmArguments = getInputArguments();
-		if (!AotCache.isRecordingEnabled(jvmArguments)) {
-			return;
-		}
-		if (logger.isInfoEnabled()) {
-			logger.info("AOT cache recording is enabled. Preparing the training workload for test class ["
-					+ testContext.getTestClass().getName() + "].");
-		}
+    @Override
+    public void beforeTestClass(TestContext testContext) throws Exception {
+        List<String> jvmArguments = getInputArguments();
+        if (!AotCache.isRecordingEnabled(jvmArguments)) {
+            return;
+        }
+        if (logger.isInfoEnabled()) {
+            logger.info("AOT cache recording is enabled. Preparing the training workload for test class ["
+                    + testContext.getTestClass().getName() + "].");
+        }
 
-		validateJdkVersion();
+        validateJdkVersion();
 
-		// Initialize the ApplicationContext eagerly so that the training workload from
-		// context creation (bean instantiation, @PostConstruct callbacks, etc.) is captured
-		// by the JVM's AOT cache mechanism.
-		ApplicationContext context = testContext.getApplicationContext();
-		validateClassLoader(context);
+        // Initialize the ApplicationContext eagerly so that the training workload from
+        // context creation (bean instantiation, @PostConstruct callbacks, etc.) is captured
+        // by the JVM's AOT cache mechanism.
+        ApplicationContext context = testContext.getApplicationContext();
+        validateClassLoader(context);
 
-		warnIfExitOnRefresh();
+        warnIfExitOnRefresh();
 
-		String outputPath = AotCache.findOutputPath(jvmArguments);
-		if (outputPath != null) {
-			logger.info("The JVM will assemble the AOT cache at: " + outputPath
-					+ " (on clean exit, after shutdown hooks).");
-		}
-	}
+        String outputPath = AotCache.findOutputPath(jvmArguments);
+        if (outputPath != null) {
+            logger.info("The JVM will assemble the AOT cache at: " + outputPath
+                    + " (on clean exit, after shutdown hooks).");
+        }
+    }
 
-	/**
-	 * Validate that the running JDK supports AOT cache recording.
-	 * @throws IllegalStateException if the JDK version is unsupported
-	 */
-	protected void validateJdkVersion() {
-		int requiredVersion = getRequiredJavaFeatureVersion();
-		int currentVersion = Runtime.version().feature();
-		if (currentVersion < requiredVersion) {
-			throw new IllegalStateException(
-					String.format("AOT cache recording requires JDK %d or later (JEP 514). Current JDK version: %d",
-							requiredVersion, currentVersion));
-		}
-	}
+    /**
+     * Validate that the running JDK supports AOT cache recording.
+     * @throws IllegalStateException if the JDK version is unsupported
+     */
+    protected void validateJdkVersion() {
+        int requiredVersion = getRequiredJavaFeatureVersion();
+        int currentVersion = Runtime.version().feature();
+        if (currentVersion < requiredVersion) {
+            throw new IllegalStateException(
+                    String.format("AOT cache recording requires JDK %d or later (JEP 514). Current JDK version: %d",
+                            requiredVersion, currentVersion));
+        }
+    }
 
-	/**
-	 * Validate that the given application context uses a standard JDK class loader.
-	 * @param context the application context
-	 */
-	protected void validateClassLoader(ApplicationContext context) {
-		ClassLoader classLoader = context.getClassLoader();
-		if (classLoader != null && !isStandardClassLoader(classLoader) && logger.isWarnEnabled()) {
-			logger.warn(String.format("""
-					The ApplicationContext class loader [%s] is not a standard JDK class loader.
-					An AOT cache only caches classes loaded by JDK built-in class loaders (JEP 483).
-					Use an extracted JAR layout with the standard class loader (for example, \
-					Spring Boot's executable JAR unpacking) for the cache to be effective.""",
-					classLoader.getClass().getName()));
-		}
-	}
+    /**
+     * Validate that the given application context uses a standard JDK class loader.
+     * @param context the application context
+     */
+    protected void validateClassLoader(ApplicationContext context) {
+        ClassLoader classLoader = context.getClassLoader();
+        if (classLoader != null && !isStandardClassLoader(classLoader) && logger.isWarnEnabled()) {
+            logger.warn(String.format("""
+                    The ApplicationContext class loader [%s] is not a standard JDK class loader.
+                    An AOT cache only caches classes loaded by JDK built-in class loaders (JEP 483).
+                    Use an extracted JAR layout with the standard class loader (for example, \
+                    Spring Boot's executable JAR unpacking) for the cache to be effective.""",
+                    classLoader.getClass().getName()));
+        }
+    }
 
-	/**
-	 * Determine whether the {@code -Dspring.context.exit=onRefresh} flag is configured.
-	 * @return {@code true} if the flag is set to {@code onRefresh}
-	 */
-	protected boolean isExitOnRefreshConfigured() {
-		return "onRefresh".equalsIgnoreCase(SpringProperties.getProperty(DefaultLifecycleProcessor.EXIT_PROPERTY_NAME));
-	}
+    /**
+     * Determine whether the {@code -Dspring.context.exit=onRefresh} flag is configured.
+     * @return {@code true} if the flag is set to {@code onRefresh}
+     */
+    protected boolean isExitOnRefreshConfigured() {
+        return "onRefresh".equalsIgnoreCase(SpringProperties.getProperty(DefaultLifecycleProcessor.EXIT_PROPERTY_NAME));
+    }
 
-	private void warnIfExitOnRefresh() {
-		if (isExitOnRefreshConfigured() && logger.isWarnEnabled()) {
-			logger.warn("The '" + DefaultLifecycleProcessor.EXIT_PROPERTY_NAME + "=onRefresh' property is set. "
-					+ "This terminates the JVM when the ApplicationContext refreshes and is not compatible "
-					+ "with generating an AOT cache from integration tests. Remove it from the test JVM arguments.");
-		}
-	}
+    private void warnIfExitOnRefresh() {
+        if (isExitOnRefreshConfigured() && logger.isWarnEnabled()) {
+            logger.warn("The '" + DefaultLifecycleProcessor.EXIT_PROPERTY_NAME + "=onRefresh' property is set. "
+                    + "This terminates the JVM when the ApplicationContext refreshes and is not compatible "
+                    + "with generating an AOT cache from integration tests. Remove it from the test JVM arguments.");
+        }
+    }
 
-	/**
-	 * Return the minimum JDK feature version required for AOT cache recording.
-	 * <p>Overridable in tests to simulate unsupported JDK versions.
-	 * @return the required JDK feature version (default: {@value AotCache#MINIMUM_RECORDING_JDK})
-	 */
-	protected int getRequiredJavaFeatureVersion() {
-		return AotCache.MINIMUM_RECORDING_JDK;
-	}
+    /**
+     * Return the minimum JDK feature version required for AOT cache recording.
+     * <p>Overridable in tests to simulate unsupported JDK versions.
+     * @return the required JDK feature version (default: {@value AotCache#MINIMUM_RECORDING_JDK})
+     */
+    protected int getRequiredJavaFeatureVersion() {
+        return AotCache.MINIMUM_RECORDING_JDK;
+    }
 
-	/**
-	 * Return {@code true} if the given class loader is a standard JDK class loader.
-	 * @param classLoader the class loader to check (never {@code null})
-	 * @return {@code true} if the class loader is a standard JDK class loader
-	 */
-	protected boolean isStandardClassLoader(ClassLoader classLoader) {
-		return classLoader.getClass().getName().startsWith("jdk.internal.loader.");
-	}
+    /**
+     * Return {@code true} if the given class loader is a standard JDK class loader.
+     * @param classLoader the class loader to check (never {@code null})
+     * @return {@code true} if the class loader is a standard JDK class loader
+     */
+    protected boolean isStandardClassLoader(ClassLoader classLoader) {
+        return classLoader.getClass().getName().startsWith("jdk.internal.loader.");
+    }
 
-	/**
-	 * Return the JVM command-line arguments, excluding arguments passed to the main method.
-	 * <p>Exposed for testing purposes.
-	 * @return the JVM command-line arguments
-	 */
-	protected List<String> getInputArguments() {
-		return AotCache.currentJvmArguments();
-	}
+    /**
+     * Return the JVM command-line arguments, excluding arguments passed to the main method.
+     * <p>Exposed for testing purposes.
+     * @return the JVM command-line arguments
+     */
+    protected List<String> getInputArguments() {
+        return AotCache.currentJvmArguments();
+    }
 }

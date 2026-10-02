@@ -32,9 +32,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 @SpringJUnitConfig(TrainingApplication.class)
 class TrainingApplicationTests {
 
-	@Test
-	void greetingServiceIsWired(@Autowired TrainingApplication.GreetingService greetingService) {
-		assertThat(greetingService.greet("AOT")).isEqualTo("Hello, AOT!");
-	}
+    @Test
+    void greetingServiceIsWired(@Autowired TrainingApplication.GreetingService greetingService) {
+        assertThat(greetingService.greet("AOT")).isEqualTo("Hello, AOT!");
+    }
 
 }

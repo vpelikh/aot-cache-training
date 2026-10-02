@@ -29,27 +29,27 @@ import org.gradle.process.CommandLineArgumentProvider;
  */
 class AotCacheArgsProvider implements CommandLineArgumentProvider {
 
-	private final AotCacheTrainingExtension extension;
+    private final AotCacheTrainingExtension extension;
 
-	AotCacheArgsProvider(AotCacheTrainingExtension extension) {
-		this.extension = extension;
-	}
+    AotCacheArgsProvider(AotCacheTrainingExtension extension) {
+        this.extension = extension;
+    }
 
-	@Override
-	public Iterable<String> asArguments() {
-		List<String> args = new ArrayList<>();
-		for (String packageName : this.extension.getPackagesToScan().getOrElse(List.of())) {
-			args.add("--select-package=" + packageName);
-		}
-		if (!Boolean.TRUE.equals(this.extension.getFailOnTestFailure().getOrElse(true))) {
-			args.add("--no-fail-on-test-failure");
-		}
-		// A training run that discovers no tests would record a large but useless cache, so
-		// it fails by default with an actionable message.
-		if (Boolean.TRUE.equals(this.extension.getAllowEmptyWorkload().getOrElse(false))) {
-			args.add("--allow-empty");
-		}
-		return args;
-	}
+    @Override
+    public Iterable<String> asArguments() {
+        List<String> args = new ArrayList<>();
+        for (String packageName : this.extension.getPackagesToScan().getOrElse(List.of())) {
+            args.add("--select-package=" + packageName);
+        }
+        if (!Boolean.TRUE.equals(this.extension.getFailOnTestFailure().getOrElse(true))) {
+            args.add("--no-fail-on-test-failure");
+        }
+        // A training run that discovers no tests would record a large but useless cache, so
+        // it fails by default with an actionable message.
+        if (Boolean.TRUE.equals(this.extension.getAllowEmptyWorkload().getOrElse(false))) {
+            args.add("--allow-empty");
+        }
+        return args;
+    }
 
 }

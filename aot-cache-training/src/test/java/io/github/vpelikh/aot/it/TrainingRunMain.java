@@ -35,23 +35,23 @@ import org.junit.platform.launcher.listeners.TestExecutionSummary;
  */
 public final class TrainingRunMain {
 
-	private TrainingRunMain() {
-	}
+    private TrainingRunMain() {
+    }
 
-	public static void main(String[] args) {
-		LauncherDiscoveryRequest request = LauncherDiscoveryRequestBuilder.request()
-			.selectors(DiscoverySelectors.selectClass(TrainingApplicationTests.class))
-			.build();
-		Launcher launcher = LauncherFactory.create();
-		SummaryGeneratingListener listener = new SummaryGeneratingListener();
-		launcher.execute(request, listener);
-		TestExecutionSummary summary = listener.getSummary();
-		PrintWriter writer = new PrintWriter(System.out, true);
-		summary.printTo(writer);
-		if (summary.getTotalFailureCount() > 0) {
-			summary.printFailuresTo(writer);
-			System.exit(1);
-		}
-	}
+    public static void main(String[] args) {
+        LauncherDiscoveryRequest request = LauncherDiscoveryRequestBuilder.request()
+            .selectors(DiscoverySelectors.selectClass(TrainingApplicationTests.class))
+            .build();
+        Launcher launcher = LauncherFactory.create();
+        SummaryGeneratingListener listener = new SummaryGeneratingListener();
+        launcher.execute(request, listener);
+        TestExecutionSummary summary = listener.getSummary();
+        PrintWriter writer = new PrintWriter(System.out, true);
+        summary.printTo(writer);
+        if (summary.getTotalFailureCount() > 0) {
+            summary.printFailuresTo(writer);
+            System.exit(1);
+        }
+    }
 
 }

@@ -1,64 +1,64 @@
 <?xml version="1.0" encoding="UTF-8"?>
 <project xmlns="http://maven.apache.org/POM/4.0.0"
-	xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
-	xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
-	<modelVersion>4.0.0</modelVersion>
+    xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+    xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
 
-	<parent>
-		<groupId>org.springframework.boot</groupId>
-		<artifactId>spring-boot-starter-parent</artifactId>
-		<version>4.1.1</version>
-		<relativePath/>
-	</parent>
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>4.1.1</version>
+        <relativePath/>
+    </parent>
 
-	<groupId>example</groupId>
-	<artifactId>maven-spring-boot-example</artifactId>
-	<version>1.0.0</version>
-	<name>maven-spring-boot-example</name>
-	<description>Example Spring Boot app that records and verifies an AOT cache from its tests</description>
+    <groupId>example</groupId>
+    <artifactId>maven-spring-boot-example</artifactId>
+    <version>1.0.0</version>
+    <name>maven-spring-boot-example</name>
+    <description>Example Spring Boot app that records and verifies an AOT cache from its tests</description>
 
-	<properties>
-		<java.version>25</java.version>
-		<aot-cache-training.version>0.1.0</aot-cache-training.version>
-	</properties>
+    <properties>
+        <java.version>25</java.version>
+        <aot-cache-training.version>0.1.0</aot-cache-training.version>
+    </properties>
 
-	<dependencies>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-web</artifactId>
-		</dependency>
-		<dependency>
-			<groupId>org.springframework.boot</groupId>
-			<artifactId>spring-boot-starter-test</artifactId>
-			<scope>test</scope>
-		</dependency>
-	</dependencies>
+    <dependencies>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-web</artifactId>
+        </dependency>
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-test</artifactId>
+            <scope>test</scope>
+        </dependency>
+    </dependencies>
 
-	<build>
-		<plugins>
-			<plugin>
-				<groupId>org.springframework.boot</groupId>
-				<artifactId>spring-boot-maven-plugin</artifactId>
-			</plugin>
-			<plugin>
-				<groupId>io.github.vpelikh</groupId>
-				<artifactId>aot-cache-training-maven-plugin</artifactId>
-				<version>${aot-cache-training.version}</version>
-				<executions>
-					<execution>
-						<id>aot-record</id>
-						<goals>
-							<goal>record</goal>
-						</goals>
-					</execution>
-					<execution>
-						<id>aot-verify</id>
-						<goals>
-							<goal>verify</goal>
-						</goals>
-					</execution>
-				</executions>
-			</plugin>
-		</plugins>
-	</build>
+    <build>
+        <plugins>
+            <plugin>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+            </plugin>
+            <plugin>
+                <groupId>io.github.vpelikh</groupId>
+                <artifactId>aot-cache-training-maven-plugin</artifactId>
+                <version>${aot-cache-training.version}</version>
+                <executions>
+                    <execution>
+                        <id>aot-record</id>
+                        <goals>
+                            <goal>record</goal>
+                        </goals>
+                    </execution>
+                    <execution>
+                        <id>aot-verify</id>
+                        <goals>
+                            <goal>verify</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+        </plugins>
+    </build>
 </project>

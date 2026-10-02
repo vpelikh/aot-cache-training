@@ -31,73 +31,73 @@ import static org.assertj.core.api.Assertions.assertThat;
  */
 class AotCacheTests {
 
-	@Test
-	void isRecordingEnabledWhenOutputFlagPresent() {
-		assertThat(AotCache.isRecordingEnabled(List.of("-Xmx512m", "-XX:AOTCacheOutput=build/app.aot"))).isTrue();
-	}
+    @Test
+    void isRecordingEnabledWhenOutputFlagPresent() {
+        assertThat(AotCache.isRecordingEnabled(List.of("-Xmx512m", "-XX:AOTCacheOutput=build/app.aot"))).isTrue();
+    }
 
-	@Test
-	void isRecordingEnabledWhenOutputFlagAbsent() {
-		assertThat(AotCache.isRecordingEnabled(List.of("-Xmx512m", "-jar", "app.jar"))).isFalse();
-	}
+    @Test
+    void isRecordingEnabledWhenOutputFlagAbsent() {
+        assertThat(AotCache.isRecordingEnabled(List.of("-Xmx512m", "-jar", "app.jar"))).isFalse();
+    }
 
-	@Test
-	void isRecordingEnabledIgnoresTwoStepRecordMode() {
-		// JDK 24 two-step record mode is not the single-step workflow we support
-		assertThat(AotCache
-			.isRecordingEnabled(List.of("-XX:AOTMode=record", "-XX:AOTConfiguration=build/app.aotconf"))).isFalse();
-	}
+    @Test
+    void isRecordingEnabledIgnoresTwoStepRecordMode() {
+        // JDK 24 two-step record mode is not the single-step workflow we support
+        assertThat(AotCache
+            .isRecordingEnabled(List.of("-XX:AOTMode=record", "-XX:AOTConfiguration=build/app.aotconf"))).isFalse();
+    }
 
-	@Test
-	void isRecordingEnabledIgnoresCreateMode() {
-		assertThat(AotCache.isRecordingEnabled(List.of("-XX:AOTMode=create", "-XX:AOTCache=build/app.aot"))).isFalse();
-	}
+    @Test
+    void isRecordingEnabledIgnoresCreateMode() {
+        assertThat(AotCache.isRecordingEnabled(List.of("-XX:AOTMode=create", "-XX:AOTCache=build/app.aot"))).isFalse();
+    }
 
-	@Test
-	void isRecordingEnabledIgnoresEmptyOutputPath() {
-		assertThat(AotCache.isRecordingEnabled(List.of("-XX:AOTCacheOutput="))).isFalse();
-	}
+    @Test
+    void isRecordingEnabledIgnoresEmptyOutputPath() {
+        assertThat(AotCache.isRecordingEnabled(List.of("-XX:AOTCacheOutput="))).isFalse();
+    }
 
-	@Test
-	void findOutputPathReturnsConfiguredPath() {
-		assertThat(AotCache.findOutputPath(List.of("-Xmx512m", "-XX:AOTCacheOutput=build/app.aot")))
-			.isEqualTo("build/app.aot");
-	}
+    @Test
+    void findOutputPathReturnsConfiguredPath() {
+        assertThat(AotCache.findOutputPath(List.of("-Xmx512m", "-XX:AOTCacheOutput=build/app.aot")))
+            .isEqualTo("build/app.aot");
+    }
 
-	@Test
-	void findOutputPathReturnsNullWhenAbsent() {
-		assertThat(AotCache.findOutputPath(List.of("-Xmx512m"))).isNull();
-	}
+    @Test
+    void findOutputPathReturnsNullWhenAbsent() {
+        assertThat(AotCache.findOutputPath(List.of("-Xmx512m"))).isNull();
+    }
 
-	@Test
-	void defaultCacheFileResolvesConventionalPath(@TempDir Path buildOutput) {
-		assertThat(AotCache.defaultCacheFile(buildOutput))
-			.isEqualTo(buildOutput.resolve("aot-cache").resolve("application.aot"));
-	}
+    @Test
+    void defaultCacheFileResolvesConventionalPath(@TempDir Path buildOutput) {
+        assertThat(AotCache.defaultCacheFile(buildOutput))
+            .isEqualTo(buildOutput.resolve("aot-cache").resolve("application.aot"));
+    }
 
-	@Test
-	void recordingArgumentIsAbsolute(@TempDir Path buildOutput) {
-		assertThat(AotCache.recordingArgument(buildOutput.resolve("app.aot")))
-			.isEqualTo("-XX:AOTCacheOutput=" + buildOutput.resolve("app.aot").toAbsolutePath());
-	}
+    @Test
+    void recordingArgumentIsAbsolute(@TempDir Path buildOutput) {
+        assertThat(AotCache.recordingArgument(buildOutput.resolve("app.aot")))
+            .isEqualTo("-XX:AOTCacheOutput=" + buildOutput.resolve("app.aot").toAbsolutePath());
+    }
 
-	@Test
-	void verifyRecordedCacheReturnsSizeForNonEmptyFile(@TempDir Path tempDir) throws Exception {
-		Path cacheFile = tempDir.resolve("application.aot");
-		java.nio.file.Files.writeString(cacheFile, "cache-bytes");
-		assertThat(AotCache.verifyRecordedCache(cacheFile)).isEqualTo("cache-bytes".length());
-	}
+    @Test
+    void verifyRecordedCacheReturnsSizeForNonEmptyFile(@TempDir Path tempDir) throws Exception {
+        Path cacheFile = tempDir.resolve("application.aot");
+        java.nio.file.Files.writeString(cacheFile, "cache-bytes");
+        assertThat(AotCache.verifyRecordedCache(cacheFile)).isEqualTo("cache-bytes".length());
+    }
 
-	@Test
-	void verifyRecordedCacheReturnsNegativeForEmptyFile(@TempDir Path tempDir) throws Exception {
-		Path cacheFile = tempDir.resolve("application.aot");
-		java.nio.file.Files.createFile(cacheFile);
-		assertThat(AotCache.verifyRecordedCache(cacheFile)).isEqualTo(0);
-	}
+    @Test
+    void verifyRecordedCacheReturnsNegativeForEmptyFile(@TempDir Path tempDir) throws Exception {
+        Path cacheFile = tempDir.resolve("application.aot");
+        java.nio.file.Files.createFile(cacheFile);
+        assertThat(AotCache.verifyRecordedCache(cacheFile)).isEqualTo(0);
+    }
 
-	@Test
-	void verifyRecordedCacheReturnsNegativeForMissingFile(@TempDir Path tempDir) {
-		assertThat(AotCache.verifyRecordedCache(tempDir.resolve("missing.aot"))).isNegative();
-	}
+    @Test
+    void verifyRecordedCacheReturnsNegativeForMissingFile(@TempDir Path tempDir) {
+        assertThat(AotCache.verifyRecordedCache(tempDir.resolve("missing.aot"))).isNegative();
+    }
 
 }

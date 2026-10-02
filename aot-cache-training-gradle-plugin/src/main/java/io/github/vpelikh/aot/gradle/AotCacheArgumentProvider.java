@@ -34,21 +34,21 @@ import org.gradle.process.CommandLineArgumentProvider;
  */
 class AotCacheArgumentProvider implements CommandLineArgumentProvider {
 
-	private final Property<Boolean> enabled;
+    private final Property<Boolean> enabled;
 
-	private final Provider<java.nio.file.Path> cacheFile;
+    private final Provider<java.nio.file.Path> cacheFile;
 
-	AotCacheArgumentProvider(Property<Boolean> enabled, Provider<java.nio.file.Path> cacheFile) {
-		this.enabled = enabled;
-		this.cacheFile = cacheFile;
-	}
+    AotCacheArgumentProvider(Property<Boolean> enabled, Provider<java.nio.file.Path> cacheFile) {
+        this.enabled = enabled;
+        this.cacheFile = cacheFile;
+    }
 
-	@Override
-	public Iterable<String> asArguments() {
-		if (Boolean.TRUE.equals(this.enabled.getOrElse(false))) {
-			return List.of(AotCache.recordingArgument(this.cacheFile.get()));
-		}
-		return List.of();
-	}
+    @Override
+    public Iterable<String> asArguments() {
+        if (Boolean.TRUE.equals(this.enabled.getOrElse(false))) {
+            return List.of(AotCache.recordingArgument(this.cacheFile.get()));
+        }
+        return List.of();
+    }
 
 }

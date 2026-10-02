@@ -68,208 +68,208 @@ import org.gradle.jvm.tasks.Jar;
  */
 public class AotCacheTrainingPlugin implements Plugin<Project> {
 
-	/**
-	 * Create the plugin. Gradle instantiates it when the plugin is applied.
-	 */
-	public AotCacheTrainingPlugin() {
-	}
+    /**
+     * Create the plugin. Gradle instantiates it when the plugin is applied.
+     */
+    public AotCacheTrainingPlugin() {
+    }
 
-	/**
-	 * The name of the task that records the cache.
-	 */
-	public static final String RECORD_TASK_NAME = "aotCacheTraining";
+    /**
+     * The name of the task that records the cache.
+     */
+    public static final String RECORD_TASK_NAME = "aotCacheTraining";
 
-	/**
-	 * The name of the verification task.
-	 */
-	public static final String VERIFY_TASK_NAME = "verifyAotCache";
+    /**
+     * The name of the verification task.
+     */
+    public static final String VERIFY_TASK_NAME = "verifyAotCache";
 
-	private static final String GROUP = "aot";
+    private static final String GROUP = "aot";
 
-	@Override
-	public void apply(Project project) {
-		AotCacheTrainingExtension extension = project.getExtensions()
-			.create("aotCacheTraining", AotCacheTrainingExtension.class);
-		extension.getEnabled().convention(false);
-		extension.getFailOnTestFailure().convention(true);
-		extension.getAllowEmptyWorkload().convention(false);
+    @Override
+    public void apply(Project project) {
+        AotCacheTrainingExtension extension = project.getExtensions()
+            .create("aotCacheTraining", AotCacheTrainingExtension.class);
+        extension.getEnabled().convention(false);
+        extension.getFailOnTestFailure().convention(true);
+        extension.getAllowEmptyWorkload().convention(false);
 
-		Path buildDirectory = project.getLayout().getBuildDirectory().get().getAsFile().toPath();
-		Path cacheFile = AotCache.defaultCacheFile(buildDirectory);
+        Path buildDirectory = project.getLayout().getBuildDirectory().get().getAsFile().toPath();
+        Path cacheFile = AotCache.defaultCacheFile(buildDirectory);
 
-		// The verify task is always registered so it exists regardless of plugin order.
-		project.getTasks().register(VERIFY_TASK_NAME, (task) -> {
-			task.setGroup(GROUP);
-			task.setDescription("Verifies that the integration tests recorded a non-empty JVM AOT cache");
-			task.doLast((unused) -> {
-				if (!Boolean.TRUE.equals(extension.getEnabled().getOrElse(false))) {
-					return;
-				}
-				long size = AotCache.verifyRecordedCache(cacheFile);
-				if (size <= 0) {
-					throw new IllegalStateException("AOT cache recording was enabled (aotCacheTraining.enabled = "
-							+ "true) but no non-empty cache was found at " + cacheFile + ". Run on JDK "
-							+ AotCache.MINIMUM_RECORDING_JDK
-							+ "+ and make sure the training JVM exits cleanly (no System.exit mid-run).");
-				}
-			});
-		});
+        // The verify task is always registered so it exists regardless of plugin order.
+        project.getTasks().register(VERIFY_TASK_NAME, (task) -> {
+            task.setGroup(GROUP);
+            task.setDescription("Verifies that the integration tests recorded a non-empty JVM AOT cache");
+            task.doLast((unused) -> {
+                if (!Boolean.TRUE.equals(extension.getEnabled().getOrElse(false))) {
+                    return;
+                }
+                long size = AotCache.verifyRecordedCache(cacheFile);
+                if (size <= 0) {
+                    throw new IllegalStateException("AOT cache recording was enabled (aotCacheTraining.enabled = "
+                            + "true) but no non-empty cache was found at " + cacheFile + ". Run on JDK "
+                            + AotCache.MINIMUM_RECORDING_JDK
+                            + "+ and make sure the training JVM exits cleanly (no System.exit mid-run).");
+                }
+            });
+        });
 
-		// Source sets and the jar task require the java plugin; react when it is applied so the
-		// plugin can be listed before or after 'java' in the plugins block.
-		project.getPlugins().withId("java", (java) -> configureJavaProject(project, extension, cacheFile));
-	}
+        // Source sets and the jar task require the java plugin; react when it is applied so the
+        // plugin can be listed before or after 'java' in the plugins block.
+        project.getPlugins().withId("java", (java) -> configureJavaProject(project, extension, cacheFile));
+    }
 
-	private void configureJavaProject(Project project, AotCacheTrainingExtension extension, Path cacheFile) {
-		// Package the test classes into a JAR so the training class path has no non-empty
-		// directory, which the JVM requires for AOT cache recording.
-		TaskProvider<Jar> mainJar = project.getTasks().named("jar", Jar.class);
-		TaskProvider<Jar> testJar = project.getTasks().register("testJar", Jar.class, (jar) -> {
-			SourceSetContainer sourceSets = project.getExtensions().getByType(SourceSetContainer.class);
-			jar.getArchiveClassifier().set("tests");
-			jar.from(sourceSets.getByName(SourceSet.TEST_SOURCE_SET_NAME).getOutput());
-		});
+    private void configureJavaProject(Project project, AotCacheTrainingExtension extension, Path cacheFile) {
+        // Package the test classes into a JAR so the training class path has no non-empty
+        // directory, which the JVM requires for AOT cache recording.
+        TaskProvider<Jar> mainJar = project.getTasks().named("jar", Jar.class);
+        TaskProvider<Jar> testJar = project.getTasks().register("testJar", Jar.class, (jar) -> {
+            SourceSetContainer sourceSets = project.getExtensions().getByType(SourceSetContainer.class);
+            jar.getArchiveClassifier().set("tests");
+            jar.from(sourceSets.getByName(SourceSet.TEST_SOURCE_SET_NAME).getOutput());
+        });
 
-		TaskProvider<JavaExec> record = project.getTasks()
-			.register(RECORD_TASK_NAME, JavaExec.class,
-					(task) -> configureTraining(project, extension, task, cacheFile, mainJar, testJar));
-		project.getTasks().named(RECORD_TASK_NAME, JavaExec.class).configure((task) -> task
-			.onlyIf("AOT cache recording is enabled", (unused) -> Boolean.TRUE.equals(extension.getEnabled().getOrElse(false))));
+        TaskProvider<JavaExec> record = project.getTasks()
+            .register(RECORD_TASK_NAME, JavaExec.class,
+                    (task) -> configureTraining(project, extension, task, cacheFile, mainJar, testJar));
+        project.getTasks().named(RECORD_TASK_NAME, JavaExec.class).configure((task) -> task
+            .onlyIf("AOT cache recording is enabled", (unused) -> Boolean.TRUE.equals(extension.getEnabled().getOrElse(false))));
 
-		// Verification requires the recording task.
-		project.getTasks().named(VERIFY_TASK_NAME).configure((task) -> task.dependsOn(record));
-	}
+        // Verification requires the recording task.
+        project.getTasks().named(VERIFY_TASK_NAME).configure((task) -> task.dependsOn(record));
+    }
 
-	private void configureTraining(Project project, AotCacheTrainingExtension extension, JavaExec task, Path cacheFile,
-			TaskProvider<Jar> mainJar, TaskProvider<Jar> testJar) {
-		task.setGroup(GROUP);
-		task.setDescription("Records a JVM AOT cache from the integration tests");
+    private void configureTraining(Project project, AotCacheTrainingExtension extension, JavaExec task, Path cacheFile,
+            TaskProvider<Jar> mainJar, TaskProvider<Jar> testJar) {
+        task.setGroup(GROUP);
+        task.setDescription("Records a JVM AOT cache from the integration tests");
 
-		// Run the training JVM on the project's Java toolchain (defaulting to the recording
-		// minimum, JDK 25), so recording does not depend on whichever JVM runs Gradle.
-		task.getJavaLauncher()
-			.set(project.getProviders().provider(() -> {
-				JavaLanguageVersion version = project.getExtensions()
-					.getByType(org.gradle.api.plugins.JavaPluginExtension.class)
-					.getToolchain()
-					.getLanguageVersion()
-					.getOrElse(JavaLanguageVersion.of(AotCache.MINIMUM_RECORDING_JDK));
-				return project.getExtensions()
-					.getByType(org.gradle.jvm.toolchain.JavaToolchainService.class)
-					.launcherFor((spec) -> spec.getLanguageVersion().set(version))
-					.get();
-			}));
-		task.doFirst("check the training JDK", (unused) -> {
-			int feature = task.getJavaLauncher()
-				.get()
-				.getMetadata()
-				.getLanguageVersion()
-				.asInt();
-			if (feature < AotCache.MINIMUM_RECORDING_JDK) {
-				throw new IllegalStateException("AOT cache recording requires JDK " + AotCache.MINIMUM_RECORDING_JDK
-						+ " or later, but the training JVM is JDK " + feature
-						+ ". Configure a Java 25+ toolchain for the project.");
-			}
-		});
+        // Run the training JVM on the project's Java toolchain (defaulting to the recording
+        // minimum, JDK 25), so recording does not depend on whichever JVM runs Gradle.
+        task.getJavaLauncher()
+            .set(project.getProviders().provider(() -> {
+                JavaLanguageVersion version = project.getExtensions()
+                    .getByType(org.gradle.api.plugins.JavaPluginExtension.class)
+                    .getToolchain()
+                    .getLanguageVersion()
+                    .getOrElse(JavaLanguageVersion.of(AotCache.MINIMUM_RECORDING_JDK));
+                return project.getExtensions()
+                    .getByType(org.gradle.jvm.toolchain.JavaToolchainService.class)
+                    .launcherFor((spec) -> spec.getLanguageVersion().set(version))
+                    .get();
+            }));
+        task.doFirst("check the training JDK", (unused) -> {
+            int feature = task.getJavaLauncher()
+                .get()
+                .getMetadata()
+                .getLanguageVersion()
+                .asInt();
+            if (feature < AotCache.MINIMUM_RECORDING_JDK) {
+                throw new IllegalStateException("AOT cache recording requires JDK " + AotCache.MINIMUM_RECORDING_JDK
+                        + " or later, but the training JVM is JDK " + feature
+                        + ". Configure a Java 25+ toolchain for the project.");
+            }
+        });
 
-		task.dependsOn(mainJar, testJar);
-		task.getMainClass().set("io.github.vpelikh.aot.trainer.TrainingLauncher");
-		org.gradle.api.file.ConfigurableFileCollection classpath = project.getObjects()
-			.fileCollection();
-		classpath.from(mainJar, testJar);
-		SourceSet test = project.getExtensions()
-			.getByType(SourceSetContainer.class)
-			.getByName(SourceSet.TEST_SOURCE_SET_NAME);
-		// Only JAR entries are added: the JVM refuses to record a cache when the class path
-		// contains a non-empty directory (build/classes, build/test-classes etc.).
-		classpath.from(project.getProviders().provider(() -> test.getRuntimeClasspath()
-			.getFiles()
-			.stream()
-			.filter(File::isFile)
-			.filter((file) -> !io.github.vpelikh.aot.trainer.TrainingClasspath
-				.isMockingLibrary(file.getName()))
-			.toList()));
-		// The launcher and its core helpers live on the plugin's class path, because the
-		// plugin depends on the trainer module. They carry no JUnit. The JUnit Platform
-		// generation comes from the project; the launcher itself (which junit-jupiter does
-		// not bring) is resolved at the project's own platform version so the launcher API
-		// and the test engine are never mixed across generations.
-		classpath.from(project.getProviders().provider(() -> {
-			List<File> launcher = new ArrayList<>();
-			launcher.add(launcherJar(AotCache.class));
-			boolean projectHasLauncher = test.getRuntimeClasspath()
-				.getFiles()
-				.stream()
-				.anyMatch((file) -> file.getName().startsWith(JUnitPlatformVersion.LAUNCHER_FILE_PREFIX));
-			if (!projectHasLauncher) {
-				launcher.addAll(resolveLauncher(project, test));
-			}
-			return launcher.stream().distinct().toList();
-		}));
-		classpath.from(project.getProviders()
-			.provider(() -> List.of(launcherJar(io.github.vpelikh.aot.trainer.TrainingLauncher.class))));
-		task.setClasspath(classpath);
-		task.getArgumentProviders().add(new AotCacheArgsProvider(extension));
-		task.getJvmArgumentProviders()
-			.add(new AotCacheArgumentProvider(extension.getEnabled(), project.getProviders().provider(() -> cacheFile)));
-		task.getOutputs().file(cacheFile.toFile());
-	}
+        task.dependsOn(mainJar, testJar);
+        task.getMainClass().set("io.github.vpelikh.aot.trainer.TrainingLauncher");
+        org.gradle.api.file.ConfigurableFileCollection classpath = project.getObjects()
+            .fileCollection();
+        classpath.from(mainJar, testJar);
+        SourceSet test = project.getExtensions()
+            .getByType(SourceSetContainer.class)
+            .getByName(SourceSet.TEST_SOURCE_SET_NAME);
+        // Only JAR entries are added: the JVM refuses to record a cache when the class path
+        // contains a non-empty directory (build/classes, build/test-classes etc.).
+        classpath.from(project.getProviders().provider(() -> test.getRuntimeClasspath()
+            .getFiles()
+            .stream()
+            .filter(File::isFile)
+            .filter((file) -> !io.github.vpelikh.aot.trainer.TrainingClasspath
+                .isMockingLibrary(file.getName()))
+            .toList()));
+        // The launcher and its core helpers live on the plugin's class path, because the
+        // plugin depends on the trainer module. They carry no JUnit. The JUnit Platform
+        // generation comes from the project; the launcher itself (which junit-jupiter does
+        // not bring) is resolved at the project's own platform version so the launcher API
+        // and the test engine are never mixed across generations.
+        classpath.from(project.getProviders().provider(() -> {
+            List<File> launcher = new ArrayList<>();
+            launcher.add(launcherJar(AotCache.class));
+            boolean projectHasLauncher = test.getRuntimeClasspath()
+                .getFiles()
+                .stream()
+                .anyMatch((file) -> file.getName().startsWith(JUnitPlatformVersion.LAUNCHER_FILE_PREFIX));
+            if (!projectHasLauncher) {
+                launcher.addAll(resolveLauncher(project, test));
+            }
+            return launcher.stream().distinct().toList();
+        }));
+        classpath.from(project.getProviders()
+            .provider(() -> List.of(launcherJar(io.github.vpelikh.aot.trainer.TrainingLauncher.class))));
+        task.setClasspath(classpath);
+        task.getArgumentProviders().add(new AotCacheArgsProvider(extension));
+        task.getJvmArgumentProviders()
+            .add(new AotCacheArgumentProvider(extension.getEnabled(), project.getProviders().provider(() -> cacheFile)));
+        task.getOutputs().file(cacheFile.toFile());
+    }
 
-	/**
-	 * Return the JAR that declares the given class, on the plugin's own class path.
-	 * @param type a class from the component
-	 * @return the JAR or classes directory
-	 */
-	private static File launcherJar(Class<?> type) {
-		try {
-			java.security.CodeSource codeSource = type.getProtectionDomain().getCodeSource();
-			if (codeSource == null) {
-				throw new IllegalStateException("No code source for " + type.getName());
-			}
-			return new File(codeSource.getLocation().toURI());
-		}
-		catch (Exception ex) {
-			throw new IllegalStateException("Unable to locate the code source for " + type.getName(), ex);
-		}
-	}
+    /**
+     * Return the JAR that declares the given class, on the plugin's own class path.
+     * @param type a class from the component
+     * @return the JAR or classes directory
+     */
+    private static File launcherJar(Class<?> type) {
+        try {
+            java.security.CodeSource codeSource = type.getProtectionDomain().getCodeSource();
+            if (codeSource == null) {
+                throw new IllegalStateException("No code source for " + type.getName());
+            }
+            return new File(codeSource.getLocation().toURI());
+        }
+        catch (Exception ex) {
+            throw new IllegalStateException("Unable to locate the code source for " + type.getName(), ex);
+        }
+    }
 
-	/**
-	 * Resolve the JUnit Platform launcher at the project's own JUnit Platform version, so the
-	 * launcher API and the test engine belong to the same generation. The version is taken
-	 * from the resolved test dependency coordinates (falling back to JAR names, then to the
-	 * version this plugin was built against).
-	 * @param project the project
-	 * @param test the test source set
-	 * @return the launcher JAR(s)
-	 */
-	private static List<File> resolveLauncher(Project project, SourceSet test) {
-		String version = JUnitPlatformVersion.fromCoordinates(dependencyCoordinates(project, test))
-			.or(() -> JUnitPlatformVersion.find(test.getRuntimeClasspath().getFiles().stream().map(File::toPath).toList()))
-			.orElse(JUnitPlatformVersion.DEFAULT_PLATFORM_VERSION);
-		org.gradle.api.artifacts.Configuration configuration = project.getConfigurations()
-			.detachedConfiguration(project.getDependencies().create(JUnitPlatformVersion.LAUNCHER_COORDINATE + ":" + version));
-		configuration.setTransitive(true);
-		return new ArrayList<>(configuration.resolve());
-	}
+    /**
+     * Resolve the JUnit Platform launcher at the project's own JUnit Platform version, so the
+     * launcher API and the test engine belong to the same generation. The version is taken
+     * from the resolved test dependency coordinates (falling back to JAR names, then to the
+     * version this plugin was built against).
+     * @param project the project
+     * @param test the test source set
+     * @return the launcher JAR(s)
+     */
+    private static List<File> resolveLauncher(Project project, SourceSet test) {
+        String version = JUnitPlatformVersion.fromCoordinates(dependencyCoordinates(project, test))
+            .or(() -> JUnitPlatformVersion.find(test.getRuntimeClasspath().getFiles().stream().map(File::toPath).toList()))
+            .orElse(JUnitPlatformVersion.DEFAULT_PLATFORM_VERSION);
+        org.gradle.api.artifacts.Configuration configuration = project.getConfigurations()
+            .detachedConfiguration(project.getDependencies().create(JUnitPlatformVersion.LAUNCHER_COORDINATE + ":" + version));
+        configuration.setTransitive(true);
+        return new ArrayList<>(configuration.resolve());
+    }
 
-	/**
-	 * Return the resolved {@code group:artifact} to version map for the test runtime
-	 * configuration, so the JUnit Platform version can be read from dependency metadata
-	 * rather than file names.
-	 * @param project the project
-	 * @param test the test source set
-	 * @return the coordinate map
-	 */
-	private static Map<String, String> dependencyCoordinates(Project project, SourceSet test) {
-		Map<String, String> coordinates = new LinkedHashMap<>();
-		org.gradle.api.artifacts.Configuration configuration = project.getConfigurations()
-			.getByName(test.getRuntimeClasspathConfigurationName());
-		for (org.gradle.api.artifacts.ResolvedArtifact artifact : configuration.getResolvedConfiguration()
-			.getResolvedArtifacts()) {
-			org.gradle.api.artifacts.ModuleVersionIdentifier id = artifact.getModuleVersion().getId();
-			coordinates.putIfAbsent(id.getGroup() + ":" + id.getName(), id.getVersion());
-		}
-		return coordinates;
-	}
+    /**
+     * Return the resolved {@code group:artifact} to version map for the test runtime
+     * configuration, so the JUnit Platform version can be read from dependency metadata
+     * rather than file names.
+     * @param project the project
+     * @param test the test source set
+     * @return the coordinate map
+     */
+    private static Map<String, String> dependencyCoordinates(Project project, SourceSet test) {
+        Map<String, String> coordinates = new LinkedHashMap<>();
+        org.gradle.api.artifacts.Configuration configuration = project.getConfigurations()
+            .getByName(test.getRuntimeClasspathConfigurationName());
+        for (org.gradle.api.artifacts.ResolvedArtifact artifact : configuration.getResolvedConfiguration()
+            .getResolvedArtifacts()) {
+            org.gradle.api.artifacts.ModuleVersionIdentifier id = artifact.getModuleVersion().getId();
+            coordinates.putIfAbsent(id.getGroup() + ":" + id.getName(), id.getVersion());
+        }
+        return coordinates;
+    }
 
 }

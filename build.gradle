@@ -56,22 +56,25 @@ subprojects {
 
 	plugins.withId("maven-publish") {
 		// java-gradle-plugin already registers a 'pluginMaven' publication, so only add a
-		// custom publication when one is not already present.
-		if (!plugins.hasPlugin("java-gradle-plugin")) {
-			publishing {
-				publications {
-					"$name"(MavenPublication) {
-						groupId = rootProject.group
-						artifactId = project.name
-						version = project.version
-						from components.java
-						pom {
-							name = project.name
-							description = project.description
-							licenses {
-								license {
-									name = "Apache License, Version 2.0"
-									url = "https://www.apache.org/licenses/LICENSE-2.0.txt"
+		// custom publication when one is not already present. Checked after evaluation
+		// because plugin application order is not guaranteed.
+		afterEvaluate {
+			if (!plugins.hasPlugin("java-gradle-plugin")) {
+				publishing {
+					publications {
+						"$name"(MavenPublication) {
+							groupId = rootProject.group
+							artifactId = project.name
+							version = project.version
+							from components.java
+							pom {
+								name = project.name
+								description = project.description
+								licenses {
+									license {
+										name = "Apache License, Version 2.0"
+										url = "https://www.apache.org/licenses/LICENSE-2.0.txt"
+									}
 								}
 							}
 						}

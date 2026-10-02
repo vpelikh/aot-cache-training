@@ -18,7 +18,6 @@ package io.github.vpelikh.aot;
 
 import java.nio.file.Path;
 import java.util.List;
-import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
@@ -80,19 +79,6 @@ class AotCacheTests {
 	void recordingArgumentIsAbsolute(@TempDir Path buildOutput) {
 		assertThat(AotCache.recordingArgument(buildOutput.resolve("app.aot")))
 			.isEqualTo("-XX:AOTCacheOutput=" + buildOutput.resolve("app.aot").toAbsolutePath());
-	}
-
-	@Test
-	void runtimeMetadataCapturesPlatform() {
-		Map<String, String> metadata = AotCache.runtimeMetadata();
-		assertThat(metadata).containsKeys("java.version", "os.arch");
-		assertThat(metadata.get("os.arch")).isNotBlank();
-	}
-
-	@Test
-	void isJvmOptionRecognizesXxOptions() {
-		assertThat(AotCache.isJvmOption("-XX:+UseZGC")).isTrue();
-		assertThat(AotCache.isJvmOption("-jar")).isFalse();
 	}
 
 	@Test

@@ -21,7 +21,6 @@ import java.lang.management.ManagementFactory;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
-import java.util.Map;
 
 import org.jspecify.annotations.Nullable;
 
@@ -49,13 +48,6 @@ import org.jspecify.annotations.Nullable;
  * @see <a href="https://openjdk.org/jeps/514">JEP 514: Ahead-of-Time Command-Line Ergonomics</a>
  */
 public final class AotCache {
-
-	/**
-	 * The system property / environment variable used to opt in to AOT cache recording
-	 * when the flag is injected by tooling. Its value is not otherwise interpreted: the
-	 * effective switch is the presence of {@value #OUTPUT_FLAG} on the JVM command line.
-	 */
-	public static final String ENABLED_PROPERTY = "aot.cache.recording.enabled";
 
 	/**
 	 * The JVM flag that enables single-step AOT cache recording.
@@ -93,8 +85,6 @@ public final class AotCache {
 	 * AOT cache handling.
 	 */
 	public static final String BUILDPACK_ENABLE_ENV = "BP_JVM_AOTCACHE_ENABLED";
-
-	private static final String INPUT_ARGUMENT_PREFIX = "-XX:";
 
 	private AotCache() {
 	}
@@ -136,15 +126,6 @@ public final class AotCache {
 	}
 
 	/**
-	 * Return {@code true} if the running JDK is new enough to record an AOT cache.
-	 * @return {@code true} if the current feature version is {@value #MINIMUM_RECORDING_JDK}
-	 * or later
-	 */
-	public static boolean isCurrentJdkSupported() {
-		return Runtime.version().feature() >= MINIMUM_RECORDING_JDK;
-	}
-
-	/**
 	 * Resolve the conventional cache file path within the given build output directory.
 	 * @param buildOutputDirectory the build output directory (for example {@code build/}
 	 * or {@code target/})
@@ -161,28 +142,6 @@ public final class AotCache {
 	 */
 	public static String recordingArgument(Path outputPath) {
 		return OUTPUT_FLAG + outputPath.toAbsolutePath();
-	}
-
-	/**
-	 * Return a minimal map of runtime properties that identify the JDK and platform that
-	 * recorded a cache. This is informational only: the JVM remains the source of truth
-	 * for cache compatibility.
-	 * @return metadata such as {@code java.version} and {@code os.arch}
-	 */
-	public static Map<String, String> runtimeMetadata() {
-		return Map.of("java.version", System.getProperty("java.version", ""), "java.vendor",
-				System.getProperty("java.vendor", ""), "os.name", System.getProperty("os.name", ""), "os.arch",
-				System.getProperty("os.arch", ""));
-	}
-
-	/**
-	 * Return {@code true} if the given argument is a JVM {@code -XX:} option, which can be
-	 * useful when appending to a user-provided argument list.
-	 * @param argument the argument to check
-	 * @return {@code true} if the argument starts with {@value #INPUT_ARGUMENT_PREFIX}
-	 */
-	public static boolean isJvmOption(String argument) {
-		return argument.startsWith(INPUT_ARGUMENT_PREFIX);
 	}
 
 	/**

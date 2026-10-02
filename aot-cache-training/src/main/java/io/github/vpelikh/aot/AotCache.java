@@ -55,19 +55,9 @@ public final class AotCache {
 	public static final String OUTPUT_FLAG = "-XX:AOTCacheOutput=";
 
 	/**
-	 * The JVM flag that loads a pre-recorded cache at startup.
-	 */
-	public static final String CACHE_FLAG = "-XX:AOTCache=";
-
-	/**
 	 * The minimum JDK feature version that supports single-step recording (JDK 25, JEP 514).
 	 */
 	public static final int MINIMUM_RECORDING_JDK = 25;
-
-	/**
-	 * The minimum JDK feature version that supports loading an AOT cache (JDK 24, JEP 483).
-	 */
-	public static final int MINIMUM_LOADING_JDK = 24;
 
 	/**
 	 * The conventional file name of a recorded cache within an {@code aot-cache} directory.
@@ -79,12 +69,6 @@ public final class AotCache {
 	 * output or application content.
 	 */
 	public static final String CACHE_DIRECTORY = "aot-cache";
-
-	/**
-	 * Environment variable understood by the Paketo Spring Boot buildpack to opt in to
-	 * AOT cache handling.
-	 */
-	public static final String BUILDPACK_ENABLE_ENV = "BP_JVM_AOTCACHE_ENABLED";
 
 	private AotCache() {
 	}

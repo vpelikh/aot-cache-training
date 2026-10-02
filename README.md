@@ -154,6 +154,40 @@ aotCacheTraining {
 ./gradlew aotCacheTraining bootBuildImage
 ```
 
+The equivalent Maven configuration records from the packaged application (run `package`
+first, or bind the `record` goal to the `verify` phase):
+
+```xml
+<plugin>
+    <groupId>io.github.vpelikh</groupId>
+    <artifactId>aot-cache-training-maven-plugin</artifactId>
+    <version>0.1.0</version>
+    <executions>
+        <execution>
+            <id>aot-record</id>
+            <phase>verify</phase>
+            <goals><goal>record</goal></goals>
+            <configuration>
+                <outOfProcess>true</outOfProcess>
+                <!-- Record inside the image so the cache matches that image's JVM build. -->
+                <containerImage>my-app:latest</containerImage>
+            </configuration>
+        </execution>
+        <execution>
+            <id>aot-verify</id>
+            <goals><goal>verify</goal></goals>
+        </execution>
+    </executions>
+</plugin>
+```
+
+```bash
+mvn verify -Daot.cache.record=true
+```
+
+The Maven plugin locates the repackaged application JAR automatically (or takes one with
+`applicationJar`).
+
 The training launcher extracts the boot jar to `runner.jar` plus `lib/`, starts it with
 `-XX:AOTCacheOutput=...` (optionally inside `containerImage`), waits for `readyUrl`, then
 runs the tests as an external client. The tests read the running application's base URL from

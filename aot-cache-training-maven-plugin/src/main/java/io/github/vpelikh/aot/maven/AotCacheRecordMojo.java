@@ -50,6 +50,13 @@ import org.apache.maven.project.MavenProject;
  * parameter. By default the goal is bound to the <code>process-test-classes</code> phase,
  * after the test classes have been compiled.
  *
+ * <p>Set <code>outOfProcess</code> to record a cache the container image can load: the
+ * packaged application runs in its own JVM (optionally inside <code>containerImage</code>)
+ * and the tests drive it over HTTP (see
+ * <code>io.github.vpelikh.aot.trainer.OutOfProcessTrainingLauncher</code>). This mode needs
+ * the repackaged application JAR, so run the <code>package</code> phase first (bind the
+ * goal to <code>verify</code>, or run <code>mvn package aot-cache-training:record</code>).
+ *
  * @author Vasily Pelikh
  */
 @Mojo(name = "record", defaultPhase = LifecyclePhase.PROCESS_TEST_CLASSES,
@@ -119,6 +126,65 @@ public class AotCacheRecordMojo extends AbstractMojo {
     @Parameter(property = "aot.cache.trainingJvm")
     private String trainingJvm;
 
+    /**
+     * Whether to record the cache out of process: the packaged application runs in its own
+     * JVM (optionally inside <code>containerImage</code>) and the tests drive it over HTTP, so
+     * the recorded class path <em>is</em> the runtime class path. Required to produce a
+     * cache the container image can load. Defaults to <code>false</code> (in-process).
+     */
+    @Parameter(property = "aot.cache.outOfProcess", defaultValue = "false")
+    private boolean outOfProcess;
+
+    /**
+     * The packaged application JAR used for out-of-process training. When unset, the
+     * repackaged Spring Boot JAR in the build directory is located automatically.
+     */
+    @Parameter(property = "aot.cache.applicationJar")
+    private String applicationJar;
+
+    /**
+     * A URL polled until it returns a 2xx/3xx response, used as the readiness check and the
+     * base URL for out-of-process training. Defaults to <code>http://localhost:8080/</code>.
+     */
+    @Parameter(defaultValue = "http://localhost:8080/")
+    private String readyUrl = "http://localhost:8080/";
+
+    /**
+     * The application start class used for out-of-process training. When unset, it is read
+     * from the packaged JAR's <code>Start-Class</code> manifest attribute.
+     */
+    @Parameter
+    private String startClass;
+
+    /**
+     * A container image whose JVM records the out-of-process cache. When set, the packaged
+     * application runs inside that image, so the recorded cache matches the image's JVM
+     * build and architecture and can be loaded by that image at runtime.
+     */
+    @Parameter
+    private String containerImage;
+
+    /**
+     * The container runtime executable used when <code>containerImage</code> is set. Defaults to
+     * <code>docker</code>.
+     */
+    @Parameter(defaultValue = "docker")
+    private String containerRuntime = "docker";
+
+    /**
+     * Arguments passed to the application during out-of-process training (for example, to
+     * set a Spring profile).
+     */
+    @Parameter
+    private List<String> applicationArguments = new ArrayList<>();
+
+    /**
+     * How long to wait for the application to become ready during out-of-process training,
+     * in seconds. Defaults to <code>120</code>.
+     */
+    @Parameter(defaultValue = "120")
+    private int startTimeout = 120;
+
     @Override
     public void execute() throws MojoExecutionException {
         if (this.skip) {
@@ -153,10 +219,17 @@ public class AotCacheRecordMojo extends AbstractMojo {
     private List<String> buildCommand(Path cacheFile, Path workDirectory) throws IOException {
         List<String> command = new ArrayList<>();
         command.add(javaExecutable());
-        command.add(AotCache.recordingArgument(cacheFile));
-        command.add("-cp");
-        command.add(jarOnlyClasspath(workDirectory));
-        command.add("io.github.vpelikh.aot.trainer.TrainingLauncher");
+        if (this.outOfProcess) {
+            command.add("-cp");
+            command.add(jarOnlyClasspath(workDirectory));
+            command.addAll(outOfProcessArguments(cacheFile));
+        }
+        else {
+            command.add(AotCache.recordingArgument(cacheFile));
+            command.add("-cp");
+            command.add(jarOnlyClasspath(workDirectory));
+            command.add("io.github.vpelikh.aot.trainer.TrainingLauncher");
+        }
         for (String packageName : this.packagesToScan) {
             command.add("--select-package=" + packageName);
         }
@@ -167,6 +240,92 @@ public class AotCacheRecordMojo extends AbstractMojo {
             command.add("--allow-empty");
         }
         return command;
+    }
+
+    /**
+     * Build the arguments that launch an out-of-process training run: the launcher class
+     * followed by the application, cache, readiness and container options. The application
+     * JVM records the cache (see {@code OutOfProcessTrainingLauncher}); the launcher JVM only
+     * runs the client tests, so no recording flag is added here.
+     * @param cacheFile the AOT cache output path
+     * @return the out-of-process launcher arguments
+     * @throws IOException if the packaged application JAR cannot be located
+     */
+    List<String> outOfProcessArguments(Path cacheFile) throws IOException {
+        List<String> arguments = new ArrayList<>();
+        arguments.add("io.github.vpelikh.aot.trainer.OutOfProcessTrainingLauncher");
+        arguments.add("--app-jar=" + resolveApplicationJar());
+        arguments.add("--cache=" + cacheFile.toAbsolutePath());
+        arguments.add("--layout=" + cacheFile.getParent().toAbsolutePath().resolve("app-layout"));
+        arguments.add("--ready-url=" + this.readyUrl);
+        if (this.startClass != null && !this.startClass.isBlank()) {
+            arguments.add("--start-class=" + this.startClass);
+        }
+        if (this.trainingJvm != null && !this.trainingJvm.isBlank()) {
+            arguments.add("--java=" + this.trainingJvm);
+        }
+        if (this.containerImage != null && !this.containerImage.isBlank()) {
+            arguments.add("--image=" + this.containerImage);
+        }
+        arguments.add("--container-runtime=" + this.containerRuntime);
+        arguments.add("--start-timeout=" + this.startTimeout);
+        for (String applicationArgument : this.applicationArguments) {
+            arguments.add("--application-arg=" + applicationArgument);
+        }
+        return arguments;
+    }
+
+    /**
+     * Resolve the packaged application JAR for out-of-process training. When
+     * <code>applicationJar</code> is unset, the repackaged Spring Boot JAR in the build
+     * directory is located automatically (the largest relocated <code>.jar</code> whose
+     * manifest declares a <code>Start-Class</code>).
+     * @return the application JAR
+     * @throws IOException if no application JAR can be found
+     */
+    private Path resolveApplicationJar() throws IOException {
+        if (this.applicationJar != null && !this.applicationJar.isBlank()) {
+            Path jar = Path.of(this.applicationJar);
+            if (!Files.isRegularFile(jar)) {
+                throw new IOException("The configured application JAR does not exist: " + jar.toAbsolutePath());
+            }
+            return jar.toAbsolutePath();
+        }
+        Path buildDirectory = this.project.getBasedir()
+            .toPath()
+            .resolve(this.project.getBuild().getDirectory());
+        Path located = null;
+        try (java.util.stream.Stream<Path> stream = Files.walk(buildDirectory)) {
+            for (Path candidate : stream.filter(Files::isRegularFile)
+                .filter((path) -> path.getFileName().toString().endsWith(".jar"))
+                .filter(this::hasPlainStartClass)
+                .toList()) {
+                if (located == null || candidate.toFile().length() > located.toFile().length()) {
+                    located = candidate;
+                }
+            }
+        }
+        if (located == null) {
+            throw new IOException("Out-of-process training needs the packaged application JAR, but none with a "
+                    + "Start-Class manifest attribute was found under " + buildDirectory
+                    + ". Run 'package' before recording, or set the applicationJar parameter.");
+        }
+        return located.toAbsolutePath();
+    }
+
+    /**
+     * Whether the given JAR declares a plain Spring Boot <code>Start-Class</code> (that is,
+     * not the loader's {@code Main-Class}).
+     */
+    private boolean hasPlainStartClass(Path jar) {
+        try (java.util.jar.JarFile jarFile = new java.util.jar.JarFile(jar.toFile())) {
+            java.util.jar.Manifest manifest = jarFile.getManifest();
+            String startClass = (manifest != null) ? manifest.getMainAttributes().getValue("Start-Class") : null;
+            return startClass != null && !startClass.isBlank();
+        }
+        catch (IOException ex) {
+            return false;
+        }
     }
 
     /**
@@ -364,6 +523,38 @@ public class AotCacheRecordMojo extends AbstractMojo {
 
     void setTrainingJvm(String trainingJvm) {
         this.trainingJvm = trainingJvm;
+    }
+
+    void setOutOfProcess(boolean outOfProcess) {
+        this.outOfProcess = outOfProcess;
+    }
+
+    void setApplicationJar(String applicationJar) {
+        this.applicationJar = applicationJar;
+    }
+
+    void setReadyUrl(String readyUrl) {
+        this.readyUrl = readyUrl;
+    }
+
+    void setStartClass(String startClass) {
+        this.startClass = startClass;
+    }
+
+    void setContainerImage(String containerImage) {
+        this.containerImage = containerImage;
+    }
+
+    void setContainerRuntime(String containerRuntime) {
+        this.containerRuntime = containerRuntime;
+    }
+
+    void setApplicationArguments(List<String> applicationArguments) {
+        this.applicationArguments = applicationArguments;
+    }
+
+    void setStartTimeout(int startTimeout) {
+        this.startTimeout = startTimeout;
     }
 
 }

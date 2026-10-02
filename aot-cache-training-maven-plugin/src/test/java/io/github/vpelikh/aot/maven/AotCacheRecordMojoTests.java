@@ -16,7 +16,10 @@
 
 package io.github.vpelikh.aot.maven;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.List;
 
 import org.apache.maven.model.Build;
 import org.apache.maven.project.MavenProject;
@@ -24,6 +27,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.assertj.core.api.Assertions.assertThatIOException;
 
 /**
  * Tests for {@link AotCacheRecordMojo}.
@@ -62,6 +66,67 @@ class AotCacheRecordMojoTests {
         mojo.setSkip(true);
 
         mojo.execute();
+    }
+
+    @Test
+    void buildsOutOfProcessLauncherArguments(@TempDir Path basedir) throws Exception {
+        Path appJar = basedir.resolve("target/app.jar");
+        Files.createDirectories(appJar.getParent());
+        writeBootJar(appJar, "com.example.Application");
+
+        AotCacheRecordMojo mojo = new AotCacheRecordMojo();
+        mojo.setProject(project(basedir));
+        mojo.setEnabled(true);
+        mojo.setOutOfProcess(true);
+        mojo.setApplicationJar(appJar.toString());
+        mojo.setReadyUrl("http://localhost:8080/");
+        mojo.setContainerImage("my-app:latest");
+        mojo.setStartTimeout(90);
+        mojo.setApplicationArguments(List.of("--spring.profiles.active=prod"));
+
+        List<String> arguments = mojo.outOfProcessArguments(basedir.resolve("target/aot-cache/application.aot"));
+
+        assertThat(arguments).contains("io.github.vpelikh.aot.trainer.OutOfProcessTrainingLauncher",
+                "--app-jar=" + appJar.toAbsolutePath(), "--ready-url=http://localhost:8080/",
+                "--image=my-app:latest", "--container-runtime=docker", "--start-timeout=90",
+                "--application-arg=--spring.profiles.active=prod");
+    }
+
+    @Test
+    void locatesPackagedApplicationJar(@TempDir Path basedir) throws Exception {
+        Path appJar = basedir.resolve("target/app-1.0.0.jar");
+        Files.createDirectories(appJar.getParent());
+        writeBootJar(appJar, "com.example.Application");
+
+        AotCacheRecordMojo mojo = new AotCacheRecordMojo();
+        mojo.setProject(project(basedir));
+
+        List<String> arguments = mojo.outOfProcessArguments(basedir.resolve("target/aot-cache/application.aot"));
+
+        assertThat(arguments).contains("--app-jar=" + appJar.toAbsolutePath());
+    }
+
+    @Test
+    void failsWhenNoPackagedApplicationJarExists(@TempDir Path basedir) throws Exception {
+        Files.createDirectories(basedir.resolve("target"));
+
+        AotCacheRecordMojo mojo = new AotCacheRecordMojo();
+        mojo.setProject(project(basedir));
+
+        assertThatIOException().isThrownBy(
+                () -> mojo.outOfProcessArguments(basedir.resolve("target/aot-cache/application.aot")));
+    }
+
+    private void writeBootJar(Path jar, String startClass) throws IOException {
+        java.util.jar.Manifest manifest = new java.util.jar.Manifest();
+        manifest.getMainAttributes().putValue("Manifest-Version", "1.0");
+        manifest.getMainAttributes().putValue("Main-Class", "org.springframework.boot.loader.launch.JarLauncher");
+        manifest.getMainAttributes().putValue("Start-Class", startClass);
+        try (java.util.jar.JarOutputStream out = new java.util.jar.JarOutputStream(Files.newOutputStream(jar),
+                manifest)) {
+            out.putNextEntry(new java.util.jar.JarEntry("BOOT-INF/"));
+            out.closeEntry();
+        }
     }
 
     private MavenProject project(Path basedir) {

@@ -22,6 +22,7 @@ import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Set;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 
@@ -55,7 +56,7 @@ public final class TrainingClasspath {
 		Files.createDirectories(jarFile.getParent());
 		try (JarOutputStream jar = new JarOutputStream(Files.newOutputStream(jarFile))) {
 			if (Files.isDirectory(sourceDirectory)) {
-				java.util.Set<String> directories = new java.util.LinkedHashSet<>();
+				Set<String> directories = new LinkedHashSet<>();
 				try (var stream = Files.walk(sourceDirectory)) {
 					List<Path> files = stream.filter(Files::isRegularFile).sorted().toList();
 					for (Path file : files) {
@@ -70,7 +71,7 @@ public final class TrainingClasspath {
 		}
 	}
 
-	private static void writeParentDirectories(JarOutputStream jar, String entryName, java.util.Set<String> written)
+	private static void writeParentDirectories(JarOutputStream jar, String entryName, Set<String> written)
 			throws IOException {
 		int slash = entryName.indexOf('/');
 		while (slash >= 0) {

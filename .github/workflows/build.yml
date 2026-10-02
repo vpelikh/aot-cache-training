@@ -26,4 +26,6 @@ jobs:
         run: ../../gradlew aotCacheTraining verifyAotCache --no-daemon --stacktrace
       - name: Verify the Maven Spring Boot example records a cache
         working-directory: examples/maven-spring-boot
-        run: mvn -B verify --no-transfer-progress -Daot.cache.record=true
+        run: |
+          version="$(sed -n 's/^version=//p' ../../gradle.properties)"
+          mvn -B verify --no-transfer-progress -Daot.cache.record=true -Daot-cache-training.version="$version"

@@ -16,20 +16,9 @@
 
 package io.github.vpelikh.aot.trainer;
 
-import java.io.PrintWriter;
-import java.nio.file.Path;
-import java.nio.file.Paths;
-import java.util.ArrayList;
 import java.util.List;
 
 import io.github.vpelikh.aot.AotCache;
-import org.junit.platform.engine.discovery.DiscoverySelectors;
-import org.junit.platform.launcher.Launcher;
-import org.junit.platform.launcher.LauncherDiscoveryRequest;
-import org.junit.platform.launcher.core.LauncherDiscoveryRequestBuilder;
-import org.junit.platform.launcher.core.LauncherFactory;
-import org.junit.platform.launcher.listeners.SummaryGeneratingListener;
-import org.junit.platform.launcher.listeners.TestExecutionSummary;
 
 /**
  * Runs a set of tests as the training workload for a JVM AOT cache, then exits cleanly so
@@ -82,88 +71,7 @@ public final class TrainingLauncher {
             System.out.println("[aot-cache-training] Warning: no -XX:AOTCacheOutput flag detected on the JVM "
                     + "command line; the tests will run but no cache will be recorded.");
         }
-
-        LauncherDiscoveryRequest request = buildRequest(arguments);
-        SummaryGeneratingListener listener = new SummaryGeneratingListener();
-        try {
-            Launcher launcher = LauncherFactory.create();
-            launcher.execute(request, listener);
-        }
-        catch (org.junit.platform.commons.PreconditionViolationException ex) {
-            System.err.println("[aot-cache-training] No JUnit test engine was found on the training class path, so "
-                    + "no tests can run and no cache can be recorded. Add an engine such as "
-                    + "org.junit.jupiter:junit-jupiter (or junit-jupiter-engine) as a test dependency. Details: "
-                    + ex.getMessage());
-            System.exit(2);
-            return;
-        }
-
-        TestExecutionSummary summary = listener.getSummary();
-        PrintWriter writer = new PrintWriter(System.out, true);
-        summary.printTo(writer);
-        long failures = summary.getTotalFailureCount();
-        boolean failOnTestFailure = !arguments.contains("--no-fail-on-test-failure");
-        if (failures > 0) {
-            summary.printFailuresTo(writer);
-            if (failOnTestFailure) {
-                writer.flush();
-                System.exit(1);
-            }
-        }
-        if (summary.getTestsFoundCount() == 0) {
-            writer.println("[aot-cache-training] No tests were discovered on the class path, so the recorded cache "
-                    + "would be empty and useless. Check your test sources and any configured packages to scan. "
-                    + "Pass --allow-empty to proceed anyway.");
-            writer.flush();
-            if (!arguments.contains("--allow-empty")) {
-                System.exit(2);
-            }
-        }
-    }
-
-    private static LauncherDiscoveryRequest buildRequest(List<String> arguments) {
-        List<org.junit.platform.engine.DiscoverySelector> selectors = new ArrayList<>();
-        boolean explicitSelectors = false;
-        for (int i = 0; i < arguments.size(); i++) {
-            String argument = arguments.get(i);
-            if ("--select-package".equals(argument) && i + 1 < arguments.size()) {
-                selectors.add(DiscoverySelectors.selectPackage(arguments.get(++i)));
-                explicitSelectors = true;
-            }
-            else if ("--select-class".equals(argument) && i + 1 < arguments.size()) {
-                selectors.add(DiscoverySelectors.selectClass(arguments.get(++i)));
-                explicitSelectors = true;
-            }
-            else if (argument.startsWith("--select-package=")) {
-                selectors.add(DiscoverySelectors.selectPackage(argument.substring("--select-package=".length())));
-                explicitSelectors = true;
-            }
-            else if (argument.startsWith("--select-class=")) {
-                selectors.add(DiscoverySelectors.selectClass(argument.substring("--select-class=".length())));
-                explicitSelectors = true;
-            }
-        }
-
-        LauncherDiscoveryRequestBuilder builder = LauncherDiscoveryRequestBuilder.request();
-        if (!explicitSelectors) {
-            // Discover every test on the (JAR-only) class path.
-            builder.selectors(DiscoverySelectors.selectClasspathRoots(classpathRoots()));
-        }
-        else {
-            builder.selectors(selectors);
-        }
-        return builder.build();
-    }
-
-    private static java.util.Set<Path> classpathRoots() {
-        java.util.Set<Path> roots = new java.util.LinkedHashSet<>();
-        String classpath = System.getProperty("java.class.path", "");
-        for (String entry : classpath.split(java.io.File.pathSeparator)) {
-            if (!entry.isBlank()) {
-                roots.add(Paths.get(entry));
-            }
-        }
-        return roots;
+        System.exit(TestRun.execute(arguments));
     }
 
 }

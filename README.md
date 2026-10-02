@@ -63,6 +63,23 @@ path**.
 
 ### Gradle
 
+Kotlin DSL (`build.gradle.kts`):
+
+```kotlin
+plugins {
+    java
+    id("io.github.vpelikh.aot-cache-training")
+}
+
+aotCacheTraining {
+    enabled = true
+    // packagesToScan.set(listOf("com.example"))   // optional: limit the training workload
+    // failOnTestFailure.set(true)                 // default
+}
+```
+
+Groovy DSL (`build.gradle`):
+
 ```groovy
 plugins {
     id 'java'

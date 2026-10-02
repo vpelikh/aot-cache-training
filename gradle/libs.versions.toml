@@ -16,6 +16,7 @@ spring-core = { module = "org.springframework:spring-core", version.ref = "sprin
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
 junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version.ref = "junitPlatform" }
 junit-platform-engine = { module = "org.junit.platform:junit-platform-engine", version.ref = "junitPlatform" }
+junit-platform-commons = { module = "org.junit.platform:junit-platform-commons", version.ref = "junitPlatform" }
 assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }
 mockito-core = { module = "org.mockito:mockito-core", version.ref = "mockito" }
 maven-plugin-api = { module = "org.apache.maven:maven-plugin-api", version.ref = "maven" }

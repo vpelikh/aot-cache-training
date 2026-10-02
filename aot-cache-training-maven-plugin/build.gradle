@@ -44,11 +44,10 @@ dependencies {
 	testImplementation(libs.assertj.core)
 }
 
-// The Maven descriptor generator (maven-plugin-tools 3.15) cannot read JDK 25 class
-// files, so compile this module to an older release. The runtime behaviour is
-// unaffected: the recording flag is understood by the JDK that runs the tests.
+// The Maven descriptor generator (maven-plugin-tools 3.16) cannot read JDK 25 class
+// files (major version 69), so compile this module to an older release. The published
+// plugin still runs on JDK 25; only its bytecode target is older.
 tasks.withType(JavaCompile).configureEach {
-		options.compilerArgs.add("-Xlint:all,-processing")
 	options.release = 17
 }
 

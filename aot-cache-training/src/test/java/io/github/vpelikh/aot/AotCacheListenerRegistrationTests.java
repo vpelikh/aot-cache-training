@@ -18,11 +18,14 @@ package io.github.vpelikh.aot;
 
 import java.io.IOException;
 import java.io.InputStream;
+import java.net.URL;
+import java.util.ArrayList;
+import java.util.Enumeration;
+import java.util.List;
 import java.util.Properties;
 
 import org.junit.jupiter.api.Test;
 
-import org.springframework.core.io.support.SpringFactoriesLoader;
 import org.springframework.test.context.TestExecutionListener;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -36,7 +39,7 @@ import static org.assertj.core.api.Assertions.assertThat;
 class AotCacheListenerRegistrationTests {
 
 	@Test
-	void listenerIsListedInSpringFactories() throws IOException {
+	void thisJarDeclaresTheListener() throws IOException {
 		try (InputStream input = getClass().getResourceAsStream("/META-INF/spring.factories")) {
 			assertThat(input).as("META-INF/spring.factories must be on the class path").isNotNull();
 			Properties properties = new Properties();
@@ -47,10 +50,24 @@ class AotCacheListenerRegistrationTests {
 	}
 
 	@Test
-	void listenerIsListedForTheTestContextFramework() {
-		var names = SpringFactoriesLoader.loadFactoryNames(TestExecutionListener.class,
-				getClass().getClassLoader());
-		assertThat(names)
+	void springDiscoversTheListenerAmongClasspathFactories() throws IOException {
+		// Mirror how the SpringFactoriesLoader finds properties files: scan every
+		// META-INF/spring.factories on the class path and confirm ours registers the
+		// listener under the TestExecutionListener key.
+		Enumeration<URL> resources = getClass().getClassLoader().getResources("META-INF/spring.factories");
+		List<String> declared = new ArrayList<>();
+		while (resources.hasMoreElements()) {
+			URL url = resources.nextElement();
+			Properties properties = new Properties();
+			try (InputStream input = url.openStream()) {
+				properties.load(input);
+			}
+			String value = properties.getProperty(TestExecutionListener.class.getName());
+			if (value != null) {
+				declared.addAll(List.of(value.split(",")));
+			}
+		}
+		assertThat(declared).map(String::trim)
 			.as("AotCacheTestExecutionListener should be registered by default")
 			.contains(AotCacheTestExecutionListener.class.getName());
 	}

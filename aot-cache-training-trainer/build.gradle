@@ -31,9 +31,9 @@ dependencies {
 	//
 	// Compiled against JUnit Platform 6, which is API-compatible with the 5.x line at run
 	// time, so the launcher works for projects on either generation.
-	compileOnly("org.junit.platform:junit-platform-launcher:6.1.3")
-	compileOnly("org.junit.platform:junit-platform-engine:6.1.3")
-	compileOnly("org.junit.platform:junit-platform-commons:6.1.3")
+	compileOnly(libs.junit.platform.launcher)
+	compileOnly(libs.junit.platform.engine)
+	compileOnly(libs.junit.platform.commons)
 
 	testImplementation(libs.junit.jupiter)
 	testRuntimeOnly(libs.junit.platform.launcher)

@@ -38,17 +38,17 @@ import org.apache.maven.project.MavenProject;
  * Records a JVM AOT cache (JEP 483 / JEP 514) from the project's tests.
  *
  * <p>This goal runs the tests through
- * {@code io.github.vpelikh.aot.trainer.TrainingLauncher} in a forked JVM started with
- * {@code -XX:AOTCacheOutput=<build>/aot-cache/application.aot}. The JVM assembles the cache
- * on clean exit.
+ * <code>io.github.vpelikh.aot.trainer.TrainingLauncher</code> in a forked JVM started with
+ * <code>-XX:AOTCacheOutput=&lt;build&gt;/aot-cache/application.aot</code>. The JVM assembles
+ * the cache on clean exit.
  *
  * <p>The application and test classes are packaged into JARs first: the JVM refuses to
  * record a cache when the class path contains a non-empty directory
- * ({@code Cannot have non-empty directory in paths}).
+ * (<code>Cannot have non-empty directory in paths</code>).
  *
- * <p>Enable via the {@code aot.cache.record} property or the {@code enabled} parameter. By
- * default the goal is bound to the {@code process-test-classes} phase, after the test
- * classes have been compiled.
+ * <p>Enable via the <code>aot.cache.record</code> property or the <code>enabled</code>
+ * parameter. By default the goal is bound to the <code>process-test-classes</code> phase,
+ * after the test classes have been compiled.
  *
  * @author Vasily Pelikh
  */
@@ -69,13 +69,13 @@ public class AotCacheRecordMojo extends AbstractMojo {
 	private java.util.List<org.eclipse.aether.repository.RemoteRepository> remoteRepositories;
 
 	/**
-	 * Whether to record an AOT cache. Can also be set with {@code -Daot.cache.record=true}.
+	 * Whether to record an AOT cache. Can also be set with <code>-Daot.cache.record=true</code>.
 	 */
 	@Parameter(property = "aot.cache.record", defaultValue = "false")
 	private boolean enabled;
 
 	/**
-	 * Skip execution entirely. Can also be set with {@code -Daot.cache.skip=true}.
+	 * Skip execution entirely. Can also be set with <code>-Daot.cache.skip=true</code>.
 	 */
 	@Parameter(property = "aot.cache.skip", defaultValue = "false")
 	private boolean skip;
@@ -94,21 +94,21 @@ public class AotCacheRecordMojo extends AbstractMojo {
 	private List<String> packagesToScan = new ArrayList<>();
 
 	/**
-	 * Whether a failing test should fail the build. Defaults to {@code true}.
+	 * Whether a failing test should fail the build. Defaults to <code>true</code>.
 	 */
 	@Parameter(defaultValue = "true")
 	private boolean failOnTestFailure = true;
 
 	/**
 	 * Whether to record a cache even when the training run discovers no tests. Defaults to
-	 * {@code false}, because an empty workload records a large but useless cache.
+	 * <code>false</code>, because an empty workload records a large but useless cache.
 	 */
 	@Parameter(defaultValue = "false")
 	private boolean allowEmptyWorkload = false;
 
 	/**
-	 * Path to the {@code java} executable used for the training run. Defaults to the JVM
-	 * running Maven. Must be JDK {@value AotCache#MINIMUM_RECORDING_JDK} or later.
+	 * Path to the <code>java</code> executable used for the training run. Defaults to the JVM
+	 * running Maven. Must be JDK <code>AotCache.MINIMUM_RECORDING_JDK</code> (25) or later.
 	 */
 	@Parameter(property = "aot.cache.trainingJvm")
 	private String trainingJvm;
@@ -165,7 +165,7 @@ public class AotCacheRecordMojo extends AbstractMojo {
 
 	/**
 	 * Build a class path with no non-empty directory, as required by the JVM for AOT cache
-	 * recording. Directory entries (for example {@code target/test-classes}) are packaged
+	 * recording. Directory entries (for example <code>target/test-classes</code>) are packaged
 	 * into JARs; JAR entries are kept as-is.
 	 */
 	String jarOnlyClasspath(Path workDirectory) throws IOException {
@@ -229,8 +229,8 @@ public class AotCacheRecordMojo extends AbstractMojo {
 	}
 
 	/**
-	 * Return the resolved {@code group:artifact} to version map for the project, so the JUnit
-	 * Platform version can be read from dependency metadata rather than file names.
+	 * Return the resolved <code>group:artifact</code> to version map for the project, so the
+	 * JUnit Platform version can be read from dependency metadata rather than file names.
 	 * @return the coordinate map
 	 */
 	private Map<String, String> dependencyCoordinates() {

@@ -30,11 +30,11 @@ import org.apache.maven.project.MavenProject;
  * Verifies that a non-empty JVM AOT cache was recorded by the test run.
  *
  * <p>This goal fails the build when recording was requested
- * ({@code aot.cache.record=true}) but no cache is present. Verification happens
+ * (<code>aot.cache.record=true</code>) but no cache is present. Verification happens
  * <em>after</em> the test JVM has exited: the JVM assembles the cache only after shutdown
  * hooks run, so an in-JVM check would always report a missing cache.
  *
- * <p>By default the goal is bound to the {@code verify} phase.
+ * <p>By default the goal is bound to the <code>verify</code> phase.
  *
  * @author Vasily Pelikh
  */
@@ -46,13 +46,13 @@ public class AotCacheVerifyMojo extends AbstractMojo {
 
 	/**
 	 * Whether AOT cache recording was enabled. Can also be set with
-	 * {@code -Daot.cache.record=true}.
+	 * <code>-Daot.cache.record=true</code>.
 	 */
 	@Parameter(property = "aot.cache.record", defaultValue = "false")
 	private boolean enabled;
 
 	/**
-	 * Skip execution entirely. Can also be set with {@code -Daot.cache.skip=true}.
+	 * Skip execution entirely. Can also be set with <code>-Daot.cache.skip=true</code>.
 	 */
 	@Parameter(property = "aot.cache.skip", defaultValue = "false")
 	private boolean skip;

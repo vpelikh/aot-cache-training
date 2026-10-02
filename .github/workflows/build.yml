@@ -19,3 +19,6 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
       - name: Build
         run: ./gradlew build --no-daemon --stacktrace
+      - name: Verify the Spring Boot example records a cache
+        working-directory: examples/gradle-spring-boot
+        run: ../../gradlew aotCacheTraining verifyAotCache --no-daemon --stacktrace

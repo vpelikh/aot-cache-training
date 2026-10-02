@@ -83,35 +83,51 @@ jobs:
       - name: Create the GitHub release
         run: |
           current="v${{ steps.version.outputs.version }}"
+          previous="$(git tag --list 'v*' --sort=-v:refname | grep -vx "$current" | head -1)"
+          if [ -n "$previous" ]; then
+            range="${previous}..HEAD"
+            compare="**Full Changelog**: https://github.com/${GITHUB_REPOSITORY}/compare/${previous}...${current}"
+          else
+            range="HEAD"
+            compare="**Full Changelog**: https://github.com/${GITHUB_REPOSITORY}/commits/${current}"
+          fi
 
-          # Prefer GitHub's own release notes when they contain merged pull requests.
-          # They list PRs, authors, and a changelog link. When the repository has no
-          # pull requests for this range (for example direct commits to main), the body
-          # is empty, so fall back to a changelog built from the commit subjects.
+          # GitHub's generated notes list merged pull requests but omit commits that were
+          # pushed directly. Start from them so PR-based workflows get PR titles, authors,
+          # and links, then append the direct commits so nothing is lost when a range mixes
+          # pull requests with direct commits.
           gh api "repos/${GITHUB_REPOSITORY}/releases/generate-notes" \
             -f tag_name="$current" -f target_commitish="${GITHUB_REF_NAME}" \
             --jq .body > generated-notes.md || true
 
-          if grep -q "/pull/" generated-notes.md; then
-            mv generated-notes.md RELEASE_NOTES.md
-          else
-            previous="$(git tag --list 'v*' --sort=-v:refname | grep -vx "$current" | head -1)"
-            if [ -n "$previous" ]; then
-              range="${previous}..HEAD"
-              compare="**Full Changelog**: https://github.com/${GITHUB_REPOSITORY}/compare/${previous}...${current}"
-            else
-              range="HEAD"
-              compare="**Full Changelog**: https://github.com/${GITHUB_REPOSITORY}/commits/${current}"
+          direct=""
+          for sha in $(git rev-list --no-merges "$range"); do
+            count="$(gh api "repos/${GITHUB_REPOSITORY}/commits/${sha}/pulls" --jq 'length' 2>/dev/null || echo 0)"
+            if [ "$count" = "0" ]; then
+              direct="${direct}$(git log -1 --pretty=format:'- %s (%h)' "$sha")"$'\n'
             fi
-            {
+          done
+
+          {
+            if grep -q "/pull/" generated-notes.md; then
+              # Drop GitHub's own trailing changelog link so it can be re-added last,
+              # after the direct commits.
+              sed '/^\*\*Full Changelog\*\*/d' generated-notes.md | sed -e :a -e '/^\n*$/{$d;N;ba' -e '}'
+              if [ -n "$direct" ]; then
+                echo
+                echo "### Direct commits"
+                echo
+                printf '%s' "$direct"
+              fi
+            else
               echo "## What's Changed"
               echo
-              git log "$range" --no-merges --pretty=format:'- %s (%h)'
-              echo
-              echo
-              echo "$compare"
-            } > RELEASE_NOTES.md
-          fi
+              printf '%s' "$direct"
+            fi
+            echo
+            echo
+            echo "$compare"
+          } > RELEASE_NOTES.md
 
           gh release create "$current" --title "$current" --notes-file RELEASE_NOTES.md
         env:

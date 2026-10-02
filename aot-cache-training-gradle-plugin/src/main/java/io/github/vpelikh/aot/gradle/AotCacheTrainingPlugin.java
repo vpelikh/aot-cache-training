@@ -227,20 +227,41 @@ public class AotCacheTrainingPlugin implements Plugin<Project> {
 
 	/**
 	 * Resolve the JUnit Platform launcher at the project's own JUnit Platform version, so the
-	 * launcher API and the test engine belong to the same generation. Falls back to the
-	 * launcher version this plugin was built against when the project brings none.
+	 * launcher API and the test engine belong to the same generation. The version is taken
+	 * from the resolved test dependency coordinates (falling back to JAR names, then to the
+	 * version this plugin was built against).
 	 * @param project the project
 	 * @param test the test source set
 	 * @return the launcher JAR(s)
 	 */
 	private static List<File> resolveLauncher(Project project, SourceSet test) {
-		List<Path> projectFiles = test.getRuntimeClasspath().getFiles().stream().map(File::toPath).toList();
-		String version = JUnitPlatformVersion.find(projectFiles).orElse(DEFAULT_JUNIT_PLATFORM_VERSION);
+		String version = JUnitPlatformVersion.fromCoordinates(dependencyCoordinates(project, test))
+			.or(() -> JUnitPlatformVersion.find(test.getRuntimeClasspath().getFiles().stream().map(File::toPath).toList()))
+			.orElse(DEFAULT_JUNIT_PLATFORM_VERSION);
 		org.gradle.api.artifacts.Configuration configuration = project.getConfigurations()
-			.detachedConfiguration(project.getDependencies()
-				.create("org.junit.platform:junit-platform-launcher:" + version));
+			.detachedConfiguration(project.getDependencies().create(JUnitPlatformVersion.LAUNCHER_COORDINATE + ":" + version));
 		configuration.setTransitive(true);
 		return new ArrayList<>(configuration.resolve());
+	}
+
+	/**
+	 * Return the resolved {@code group:artifact} to version map for the test runtime
+	 * configuration, so the JUnit Platform version can be read from dependency metadata
+	 * rather than file names.
+	 * @param project the project
+	 * @param test the test source set
+	 * @return the coordinate map
+	 */
+	private static java.util.Map<String, String> dependencyCoordinates(Project project, SourceSet test) {
+		java.util.Map<String, String> coordinates = new java.util.LinkedHashMap<>();
+		org.gradle.api.artifacts.Configuration configuration = project.getConfigurations()
+			.getByName(test.getRuntimeClasspathConfigurationName());
+		for (org.gradle.api.artifacts.ResolvedArtifact artifact : configuration.getResolvedConfiguration()
+			.getResolvedArtifacts()) {
+			org.gradle.api.artifacts.ModuleVersionIdentifier id = artifact.getModuleVersion().getId();
+			coordinates.putIfAbsent(id.getGroup() + ":" + id.getName(), id.getVersion());
+		}
+		return coordinates;
 	}
 
 	/**

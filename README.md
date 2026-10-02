@@ -136,8 +136,10 @@ with `-XX:AOTCache=<path>`.
 ### JUnit Platform version alignment
 
 The plugin resolves the launcher at your project's own JUnit Platform version and isolates
-it to the training JVM. It never adds JUnit (or anything else) to your test class path, so
-your dependency tree and your normal `test` task are untouched.
+it to the training JVM. The version is read from your resolved test dependencies (falling
+back to JAR names), so it works whether your test classes run from JARs or directories. It
+never adds JUnit (or anything else) to your test class path, so your dependency tree and
+your normal `test` task are untouched.
 
 ### Training JVM
 

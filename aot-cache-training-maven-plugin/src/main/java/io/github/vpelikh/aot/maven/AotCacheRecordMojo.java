@@ -210,7 +210,9 @@ public class AotCacheRecordMojo extends AbstractMojo {
 	 * launcher version this plugin was built against when the project brings no JUnit Platform.
 	 */
 	private Path resolveLauncher() throws IOException {
-		String version = JUnitPlatformVersion.find(projectClasspathElements()).orElse(DEFAULT_JUNIT_PLATFORM_VERSION);
+		String version = JUnitPlatformVersion.fromCoordinates(dependencyCoordinates())
+			.or(() -> JUnitPlatformVersion.find(projectClasspathElements()))
+			.orElse(DEFAULT_JUNIT_PLATFORM_VERSION);
 		try {
 			org.eclipse.aether.artifact.Artifact artifact = new org.eclipse.aether.artifact.DefaultArtifact(
 					"org.junit.platform", "junit-platform-launcher", "jar", version);
@@ -224,6 +226,19 @@ public class AotCacheRecordMojo extends AbstractMojo {
 			throw new IOException("Unable to resolve org.junit.platform:junit-platform-launcher:" + version
 					+ ". The AOT cache training run needs the JUnit Platform launcher on the training class path.", ex);
 		}
+	}
+
+	/**
+	 * Return the resolved {@code group:artifact} to version map for the project, so the JUnit
+	 * Platform version can be read from dependency metadata rather than file names.
+	 * @return the coordinate map
+	 */
+	private java.util.Map<String, String> dependencyCoordinates() {
+		java.util.Map<String, String> coordinates = new java.util.LinkedHashMap<>();
+		for (org.apache.maven.artifact.Artifact artifact : this.project.getArtifacts()) {
+			coordinates.putIfAbsent(artifact.getGroupId() + ":" + artifact.getArtifactId(), artifact.getVersion());
+		}
+		return coordinates;
 	}
 
 	private List<Path> projectClasspathElements() {

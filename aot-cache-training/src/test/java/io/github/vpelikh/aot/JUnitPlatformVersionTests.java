@@ -36,6 +36,29 @@ class JUnitPlatformVersionTests {
 	}
 
 	@Test
+	void fromCoordinatesPrefersCommons() {
+		java.util.Map<String, String> coordinates = java.util.Map.of(
+				"org.junit.jupiter:junit-jupiter", "6.1.3",
+				JUnitPlatformVersion.ENGINE_COORDINATE, "6.1.3",
+				JUnitPlatformVersion.COMMONS_COORDINATE, "6.1.3");
+		assertThat(JUnitPlatformVersion.fromCoordinates(coordinates)).contains("6.1.3");
+	}
+
+	@Test
+	void fromCoordinatesIgnoresUnrelatedModules() {
+		java.util.Map<String, String> coordinates = java.util.Map.of("org.junit.jupiter:junit-jupiter", "6.1.3",
+				"org.springframework:spring-test", "7.0.9");
+		assertThat(JUnitPlatformVersion.fromCoordinates(coordinates)).isEmpty();
+	}
+
+	@Test
+	void fromCoordinatesRejectsClassifierLikeValues() {
+		java.util.Map<String, String> coordinates = java.util.Map.of(JUnitPlatformVersion.COMMONS_COORDINATE,
+				"6.0.3-sources");
+		assertThat(JUnitPlatformVersion.fromCoordinates(coordinates)).isEmpty();
+	}
+
+	@Test
 	void fromEngineJar() {
 		assertThat(JUnitPlatformVersion.fromFileName("junit-platform-engine-1.12.2.jar")).contains("1.12.2");
 	}

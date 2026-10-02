@@ -1,0 +1,12 @@
+.gradle/
+build/
+!**/src/**/build/
+out/
+target/
+*.class
+*.log
+*.aot
+*.aot.conf
+.idea/
+*.iml
+.DS_Store

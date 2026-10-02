@@ -59,6 +59,15 @@ class JUnitPlatformVersionTests {
 	}
 
 	@Test
+	void defaultPlatformVersionMatchesTheVersionCatalog() {
+		String catalogVersion = System.getProperty("aot.test.junitPlatformVersion");
+		assertThat(catalogVersion).as("the test build must pass the catalog version").isNotNull();
+		assertThat(JUnitPlatformVersion.DEFAULT_PLATFORM_VERSION)
+			.as("JUnitPlatformVersion.DEFAULT_PLATFORM_VERSION must match the version catalog")
+			.isEqualTo(catalogVersion);
+	}
+
+	@Test
 	void fromEngineJar() {
 		assertThat(JUnitPlatformVersion.fromFileName("junit-platform-engine-1.12.2.jar")).contains("1.12.2");
 	}

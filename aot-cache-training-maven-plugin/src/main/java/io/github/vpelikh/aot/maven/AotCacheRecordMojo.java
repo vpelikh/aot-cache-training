@@ -54,8 +54,6 @@ import org.apache.maven.project.MavenProject;
 		requiresDependencyResolution = org.apache.maven.plugins.annotations.ResolutionScope.TEST, threadSafe = true)
 public class AotCacheRecordMojo extends AbstractMojo {
 
-	private static final String DEFAULT_JUNIT_PLATFORM_VERSION = "6.1.3";
-
 	@Parameter(defaultValue = "${project}", readonly = true, required = true)
 	private MavenProject project;
 
@@ -184,7 +182,7 @@ public class AotCacheRecordMojo extends AbstractMojo {
 		elements.addAll(pluginClasspath());
 		// junit-jupiter does not bring the launcher, so add it unless the project already
 		// provides one, always at the project's own JUnit Platform version.
-		if (!hasJar(elements, "junit-platform-launcher-")) {
+		if (!hasJar(elements, JUnitPlatformVersion.LAUNCHER_FILE_PREFIX)) {
 			elements.add(resolveLauncher());
 		}
 		// Mocking libraries self-attach agents that break cache assembly.
@@ -212,7 +210,7 @@ public class AotCacheRecordMojo extends AbstractMojo {
 	private Path resolveLauncher() throws IOException {
 		String version = JUnitPlatformVersion.fromCoordinates(dependencyCoordinates())
 			.or(() -> JUnitPlatformVersion.find(projectClasspathElements()))
-			.orElse(DEFAULT_JUNIT_PLATFORM_VERSION);
+			.orElse(JUnitPlatformVersion.DEFAULT_PLATFORM_VERSION);
 		try {
 			org.eclipse.aether.artifact.Artifact artifact = new org.eclipse.aether.artifact.DefaultArtifact(
 					"org.junit.platform", "junit-platform-launcher", "jar", version);

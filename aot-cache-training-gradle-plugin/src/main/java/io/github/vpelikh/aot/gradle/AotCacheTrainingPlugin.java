@@ -192,7 +192,7 @@ public class AotCacheTrainingPlugin implements Plugin<Project> {
 			boolean projectHasLauncher = test.getRuntimeClasspath()
 				.getFiles()
 				.stream()
-				.anyMatch((file) -> file.getName().startsWith("junit-platform-launcher-"));
+				.anyMatch((file) -> file.getName().startsWith(JUnitPlatformVersion.LAUNCHER_FILE_PREFIX));
 			if (!projectHasLauncher) {
 				launcher.addAll(resolveLauncher(project, test));
 			}
@@ -237,7 +237,7 @@ public class AotCacheTrainingPlugin implements Plugin<Project> {
 	private static List<File> resolveLauncher(Project project, SourceSet test) {
 		String version = JUnitPlatformVersion.fromCoordinates(dependencyCoordinates(project, test))
 			.or(() -> JUnitPlatformVersion.find(test.getRuntimeClasspath().getFiles().stream().map(File::toPath).toList()))
-			.orElse(DEFAULT_JUNIT_PLATFORM_VERSION);
+			.orElse(JUnitPlatformVersion.DEFAULT_PLATFORM_VERSION);
 		org.gradle.api.artifacts.Configuration configuration = project.getConfigurations()
 			.detachedConfiguration(project.getDependencies().create(JUnitPlatformVersion.LAUNCHER_COORDINATE + ":" + version));
 		configuration.setTransitive(true);
@@ -264,10 +264,5 @@ public class AotCacheTrainingPlugin implements Plugin<Project> {
 		return coordinates;
 	}
 
-	/**
-	 * The JUnit Platform version this plugin was compiled against, used only when the project
-	 * provides no JUnit Platform of its own.
-	 */
-	private static final String DEFAULT_JUNIT_PLATFORM_VERSION = "6.1.3";
 
 }

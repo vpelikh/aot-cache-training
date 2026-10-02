@@ -55,10 +55,22 @@ public final class JUnitPlatformVersion {
 	 */
 	public static final String LAUNCHER_COORDINATE = "org.junit.platform:junit-platform-launcher";
 
+	/**
+	 * The file name prefix of the JUnit Platform Launcher JAR.
+	 */
+	public static final String LAUNCHER_FILE_PREFIX = "junit-platform-launcher-";
+
+	/**
+	 * The JUnit Platform generation the trainer is compiled against. Used only when a project
+	 * brings no JUnit Platform of its own, which should not happen for a project that runs
+	 * tests. Kept in sync with the build's version catalog by a test.
+	 */
+	public static final String DEFAULT_PLATFORM_VERSION = "6.1.3";
+
 	private static final String[] COORDINATE_MARKERS = { COMMONS_COORDINATE, ENGINE_COORDINATE, LAUNCHER_COORDINATE };
 
 	private static final String[] FILE_NAME_MARKERS = { "junit-platform-commons-", "junit-platform-engine-",
-			"junit-platform-launcher-" };
+			LAUNCHER_FILE_PREFIX };
 
 	private JUnitPlatformVersion() {
 	}

@@ -52,6 +52,9 @@ tasks.named("test") {
 		it.name.endsWith(".jar")
 	}.asPath
 	systemProperty "aot.test.classesJar", tasks.named("trainingClassesJar", Jar).get().archiveFile.get().asFile.absolutePath
+	// Lets a test assert that JUnitPlatformVersion.DEFAULT_PLATFORM_VERSION stays in step
+	// with the version catalog.
+	systemProperty "aot.test.junitPlatformVersion", libs.versions.junitPlatform.get()
 	// Recording tests reassemble classes into a JAR and fork JVMs.
 	dependsOn "trainingClassesJar"
 }

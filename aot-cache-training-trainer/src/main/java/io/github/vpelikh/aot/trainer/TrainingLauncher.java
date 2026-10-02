@@ -57,6 +57,7 @@ import org.junit.platform.launcher.listeners.TestExecutionSummary;
  * <li>{@code --scan-classpath} discovers tests on the class path (default).</li>
  * <li>{@code --select-package <pkg>} / {@code --select-class <fqcn>} restrict discovery.</li>
  * <li>{@code --fail-on-test-failure} exits non-zero if any test fails (default: {@code true}).</li>
+ * <li>{@code --allow-empty} exits zero when no tests are discovered (default: {@code false}).</li>
  * </ul>
  *
  * @author Vasily Pelikh
@@ -102,7 +103,9 @@ public final class TrainingLauncher {
 		if (summary.getTestsFoundCount() == 0) {
 			writer.println("[aot-cache-training] No tests were discovered; the cache would be empty.");
 			writer.flush();
-			System.exit(2);
+			if (!arguments.contains("--allow-empty")) {
+				System.exit(2);
+			}
 		}
 	}
 

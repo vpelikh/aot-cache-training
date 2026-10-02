@@ -16,6 +16,7 @@
 
 package io.github.vpelikh.aot.gradle;
 
+import org.gradle.api.provider.ListProperty;
 import org.gradle.api.provider.Property;
 
 /**
@@ -24,6 +25,7 @@ import org.gradle.api.provider.Property;
  * <pre>{@code
  * aotCacheTraining {
  *     enabled = true
+ *     packagesToScan = ['com.example']
  * }
  * }</pre>
  */
@@ -35,5 +37,19 @@ public abstract class AotCacheTrainingExtension {
 	 * @return the enabled property
 	 */
 	public abstract Property<Boolean> getEnabled();
+
+	/**
+	 * Packages whose tests form the training workload. When empty, the whole test class
+	 * path is scanned.
+	 * @return the packages to scan
+	 */
+	public abstract ListProperty<String> getPackagesToScan();
+
+	/**
+	 * Whether a failing test should fail the training run. Defaults to {@code true}; use
+	 * {@code false} to record a cache even when some integration tests fail.
+	 * @return the fail-on-test-failure property
+	 */
+	public abstract Property<Boolean> getFailOnTestFailure();
 
 }

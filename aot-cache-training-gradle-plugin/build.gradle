@@ -23,6 +23,7 @@ description = "Gradle plugin that records a JVM AOT cache from integration tests
 
 dependencies {
 	implementation(project(":aot-cache-training"))
+	implementation(project(":aot-cache-training-trainer"))
 
 	compileOnly(gradleApi())
 

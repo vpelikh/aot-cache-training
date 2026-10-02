@@ -16,14 +16,19 @@
 
 package io.github.vpelikh.aot.gradle;
 
+import java.io.File;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 
 import io.github.vpelikh.aot.AotCache;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
-import org.gradle.api.provider.Provider;
+import org.gradle.api.tasks.JavaExec;
+import org.gradle.api.tasks.SourceSet;
+import org.gradle.api.tasks.SourceSetContainer;
 import org.gradle.api.tasks.TaskProvider;
-import org.gradle.api.tasks.testing.Test;
+import org.gradle.jvm.tasks.Jar;
 
 /**
  * Gradle plugin that records a JVM AOT cache (JEP 483 / JEP 514) from the project's
@@ -41,64 +46,139 @@ import org.gradle.api.tasks.testing.Test;
  * }
  * }</pre>
  *
- * <p>When enabled, every {@link Test} task inherits
- * {@code -XX:AOTCacheOutput=<buildDir>/aot-cache/application.aot}, so the test JVM
- * records a cache that is assembled on clean exit. The conventional location matches what
- * the Paketo Spring Boot buildpack and container tooling look for
- * ({@code aot-cache/application.aot}).
+ * <p>When enabled, the plugin:
+ * <ol>
+ * <li>packages the main and test classes into JARs (the JVM refuses to record a cache
+ * when the class path contains a non-empty directory);</li>
+ * <li>runs the tests through {@code io.github.vpelikh.aot.trainer.TrainingLauncher} on a
+ * JAR-only class path with {@code -XX:AOTCacheOutput=<buildDir>/aot-cache/application.aot};</li>
+ * <li>verifies through the {@code verifyAotCache} task that a non-empty cache was produced.</li>
+ * </ol>
  *
- * <p>The plugin also registers a {@code verifyAotCache} task that fails the build when
- * recording was requested but no non-empty cache was produced.
+ * <p>This is deliberately separate from the normal {@code test} task: recording requires a
+ * JAR-only class path that would slow down ordinary test runs, and the recorded class path
+ * must match the one used at runtime.
  *
  * @author Vasily Pelikh
  */
 public class AotCacheTrainingPlugin implements Plugin<Project> {
 
 	/**
+	 * The name of the task that records the cache.
+	 */
+	public static final String RECORD_TASK_NAME = "aotCacheTraining";
+
+	/**
 	 * The name of the verification task.
 	 */
 	public static final String VERIFY_TASK_NAME = "verifyAotCache";
 
-	private static final String VERIFY_TASK_DESCRIPTION = "Verifies that the integration tests recorded a non-empty JVM AOT cache";
+	private static final String GROUP = "aot";
 
 	@Override
 	public void apply(Project project) {
 		AotCacheTrainingExtension extension = project.getExtensions()
 			.create("aotCacheTraining", AotCacheTrainingExtension.class);
 		extension.getEnabled().convention(false);
+		extension.getFailOnTestFailure().convention(true);
 
-		Provider<Path> cacheFile = project.getProviders()
-			.provider(() -> AotCache
-				.defaultCacheFile(project.getLayout().getBuildDirectory().get().getAsFile().toPath()));
+		Path buildDirectory = project.getLayout().getBuildDirectory().get().getAsFile().toPath();
+		Path cacheFile = AotCache.defaultCacheFile(buildDirectory);
 
-		project.getTasks().withType(Test.class).configureEach((test) -> {
-			// Contribute the flag lazily so the decision is made when the test task runs.
-			// This keeps the plugin configuration-cache compatible and works regardless of
-			// when a build script sets aotCacheTraining.enabled.
-			test.getJvmArgumentProviders().add(new AotCacheArgumentProvider(extension.getEnabled(), cacheFile));
+		// Package the test classes into a JAR so the training class path has no non-empty
+		// directory, which the JVM requires for AOT cache recording.
+		TaskProvider<Jar> mainJar = project.getTasks().named("jar", Jar.class);
+		TaskProvider<Jar> testJar = project.getTasks().register("testJar", Jar.class, (jar) -> {
+			SourceSetContainer sourceSets = project.getExtensions().getByType(SourceSetContainer.class);
+			jar.getArchiveClassifier().set("tests");
+			jar.from(sourceSets.getByName(SourceSet.TEST_SOURCE_SET_NAME).getOutput());
 		});
+
+		TaskProvider<JavaExec> record = project.getTasks()
+			.register(RECORD_TASK_NAME, JavaExec.class,
+					(task) -> configureTraining(project, extension, task, cacheFile, mainJar, testJar));
+		project.getTasks().named(RECORD_TASK_NAME, JavaExec.class).configure((task) -> task
+			.onlyIf("AOT cache recording is enabled", (unused) -> Boolean.TRUE.equals(extension.getEnabled().getOrElse(false))));
 
 		TaskProvider<?> verify = project.getTasks().register(VERIFY_TASK_NAME, (task) -> {
-			task.setGroup("verification");
-			task.setDescription(VERIFY_TASK_DESCRIPTION);
-			task.dependsOn(project.getTasks().withType(Test.class));
+			task.setGroup(GROUP);
+			task.setDescription("Verifies that the integration tests recorded a non-empty JVM AOT cache");
+			task.dependsOn(record);
 		});
-
-		project.getTasks().named(VERIFY_TASK_NAME).configure((task) -> {
-			Boolean enabled = extension.getEnabled().getOrElse(false);
-			if (Boolean.TRUE.equals(enabled)) {
-				task.doLast((unused) -> {
-					Path file = cacheFile.get();
-					long size = AotCache.verifyRecordedCache(file);
-					if (size <= 0) {
-						throw new IllegalStateException("AOT cache recording was enabled (aotCacheTraining.enabled = "
-								+ "true) but no non-empty cache was found at " + file + ". Run the tests on JDK "
-								+ AotCache.MINIMUM_RECORDING_JDK
-								+ "+ and ensure the test JVM exits cleanly (no System.exit mid-run).");
-					}
-				});
+		project.getTasks().named(VERIFY_TASK_NAME).configure((task) -> task.doLast((unused) -> {
+			if (!Boolean.TRUE.equals(extension.getEnabled().getOrElse(false))) {
+				return;
 			}
-		});
+			long size = AotCache.verifyRecordedCache(cacheFile);
+			if (size <= 0) {
+				throw new IllegalStateException("AOT cache recording was enabled (aotCacheTraining.enabled = true) "
+						+ "but no non-empty cache was found at " + cacheFile + ". Run on JDK "
+						+ AotCache.MINIMUM_RECORDING_JDK
+						+ "+ and make sure the training JVM exits cleanly (no System.exit mid-run).");
+			}
+		}));
+	}
+
+	private void configureTraining(Project project, AotCacheTrainingExtension extension, JavaExec task, Path cacheFile,
+			TaskProvider<Jar> mainJar, TaskProvider<Jar> testJar) {
+		task.setGroup(GROUP);
+		task.setDescription("Records a JVM AOT cache from the integration tests");
+
+		task.dependsOn(mainJar, testJar);
+		task.getMainClass().set("io.github.vpelikh.aot.trainer.TrainingLauncher");
+		org.gradle.api.file.ConfigurableFileCollection classpath = project.getObjects()
+			.fileCollection();
+		classpath.from(mainJar, testJar);
+		SourceSet test = project.getExtensions()
+			.getByType(SourceSetContainer.class)
+			.getByName(SourceSet.TEST_SOURCE_SET_NAME);
+		// Only JAR entries are added: the JVM refuses to record a cache when the class path
+		// contains a non-empty directory (build/classes, build/test-classes etc.).
+		classpath.from(project.getProviders().provider(() -> test.getRuntimeClasspath()
+			.getFiles()
+			.stream()
+			.filter(File::isFile)
+			.toList()));
+		// The launcher and its core helpers live on the plugin's class path, because the
+		// plugin depends on the trainer module. Resolve their jars so the training JVM can
+		// load them; JUnit Platform, Spring Test and their dependencies come from the
+		// project's own test runtime class path.
+		classpath.from(project.getProviders().provider(() -> {
+			List<File> launcher = new ArrayList<>();
+			addCodeSource(launcher, io.github.vpelikh.aot.trainer.TrainingLauncher.class);
+			addCodeSource(launcher, AotCache.class);
+			launcher.addAll(project.getBuildscript()
+				.getConfigurations()
+				.getByName("classpath")
+				.getFiles()
+				.stream()
+				.filter((file) -> file.getName().startsWith("aot-cache-training")
+						|| file.getName().startsWith("jspecify-"))
+				.toList());
+			return launcher.stream().distinct().toList();
+		}));
+		task.setClasspath(classpath);
+		task.getArgumentProviders().add(new AotCacheArgsProvider(extension));
+		task.getJvmArgumentProviders()
+			.add(new AotCacheArgumentProvider(extension.getEnabled(), project.getProviders().provider(() -> cacheFile)));
+		task.getOutputs().file(cacheFile.toFile());
+	}
+
+	/**
+	 * Add the JAR or classes directory that declares the given class.
+	 * @param target the list to add to
+	 * @param type a class from the component to add
+	 */
+	private static void addCodeSource(List<File> target, Class<?> type) {
+		try {
+			java.security.CodeSource codeSource = type.getProtectionDomain().getCodeSource();
+			if (codeSource != null) {
+				target.add(new File(codeSource.getLocation().toURI()));
+			}
+		}
+		catch (Exception ex) {
+			throw new IllegalStateException("Unable to locate the code source for " + type.getName(), ex);
+		}
 	}
 
 }

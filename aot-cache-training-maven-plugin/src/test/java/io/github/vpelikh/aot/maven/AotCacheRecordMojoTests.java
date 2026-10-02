@@ -40,43 +40,12 @@ class AotCacheRecordMojoTests {
 		mojo.setEnabled(false);
 
 		mojo.execute();
-
-		assertThat(project.getProperties()).doesNotContainKey("argLine");
-	}
-
-	@Test
-	void appendsRecordingArgumentWhenEnabled(@TempDir Path basedir) throws Exception {
-		MavenProject project = project(basedir);
-		AotCacheRecordMojo mojo = new AotCacheRecordMojo();
-		mojo.setProject(project);
-		mojo.setEnabled(true);
-
-		mojo.execute();
-
-		String argLine = project.getProperties().getProperty("argLine");
-		assertThat(argLine).startsWith("-XX:AOTCacheOutput=");
-		assertThat(argLine).contains("aot-cache");
-		assertThat(argLine).contains("application.aot");
-	}
-
-	@Test
-	void appendsToExistingArgLine(@TempDir Path basedir) throws Exception {
-		MavenProject project = project(basedir);
-		project.getProperties().setProperty("argLine", "-Xmx512m");
-		AotCacheRecordMojo mojo = new AotCacheRecordMojo();
-		mojo.setProject(project);
-		mojo.setEnabled(true);
-
-		mojo.execute();
-
-		assertThat(project.getProperties().getProperty("argLine")).startsWith("-Xmx512m -XX:AOTCacheOutput=");
 	}
 
 	@Test
 	void resolvesCacheFileUnderBuildDirectory(@TempDir Path basedir) {
-		MavenProject project = project(basedir);
 		AotCacheRecordMojo mojo = new AotCacheRecordMojo();
-		mojo.setProject(project);
+		mojo.setProject(project(basedir));
 
 		Path cacheFile = mojo.resolveCacheFile();
 
@@ -87,15 +56,12 @@ class AotCacheRecordMojoTests {
 
 	@Test
 	void skipsWhenSkipIsSet(@TempDir Path basedir) throws Exception {
-		MavenProject project = project(basedir);
 		AotCacheRecordMojo mojo = new AotCacheRecordMojo();
-		mojo.setProject(project);
+		mojo.setProject(project(basedir));
 		mojo.setEnabled(true);
 		mojo.setSkip(true);
 
 		mojo.execute();
-
-		assertThat(project.getProperties()).doesNotContainKey("argLine");
 	}
 
 	private MavenProject project(Path basedir) {
@@ -104,7 +70,6 @@ class AotCacheRecordMojoTests {
 		Build build = new Build();
 		build.setDirectory("target");
 		project.getModel().setBuild(build);
-		project.getModel().setProperties(new java.util.Properties());
 		project.setBuild(build);
 		return project;
 	}

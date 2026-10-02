@@ -16,9 +16,14 @@
 
 package io.github.vpelikh.aot.maven;
 
+import java.io.IOException;
+import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 
 import io.github.vpelikh.aot.AotCache;
+import io.github.vpelikh.aot.trainer.TrainingClasspath;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
@@ -27,34 +32,25 @@ import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.project.MavenProject;
 
 /**
- * Configures the test JVM to record a JVM AOT cache (JEP 483 / JEP 514).
+ * Records a JVM AOT cache (JEP 483 / JEP 514) from the project's tests.
  *
- * <p>When enabled, this goal appends
- * {@code -XX:AOTCacheOutput=<build>/aot-cache/application.aot} to the project
- * {@code argLine} property, so that {@code maven-surefire-plugin} forks its test JVM with
- * recording enabled. The JVM assembles the cache on clean exit.
+ * <p>This goal runs the tests through
+ * {@code io.github.vpelikh.aot.trainer.TrainingLauncher} in a forked JVM started with
+ * {@code -XX:AOTCacheOutput=<build>/aot-cache/application.aot}. The JVM assembles the cache
+ * on clean exit.
  *
- * <p>Enable via the {@code aot.cache.record} property or the {@code enabled} parameter:
+ * <p>The application and test classes are packaged into JARs first: the JVM refuses to
+ * record a cache when the class path contains a non-empty directory
+ * ({@code Cannot have non-empty directory in paths}).
  *
- * <pre>{@code
- * <plugin>
- *     <groupId>io.github.vpelikh</groupId>
- *     <artifactId>aot-cache-training-maven-plugin</artifactId>
- *     <executions>
- *         <execution>
- *             <goals>
- *                 <goal>record</goal>
- *             </goals>
- *         </execution>
- *     </executions>
- * </plugin>
- * }</pre>
- *
- * <p>By default the goal is bound to the {@code initialize} phase, before tests run.
+ * <p>Enable via the {@code aot.cache.record} property or the {@code enabled} parameter. By
+ * default the goal is bound to the {@code process-test-classes} phase, after the test
+ * classes have been compiled.
  *
  * @author Vasily Pelikh
  */
-@Mojo(name = "record", defaultPhase = LifecyclePhase.INITIALIZE, threadSafe = true)
+@Mojo(name = "record", defaultPhase = LifecyclePhase.PROCESS_TEST_CLASSES,
+		requiresDependencyResolution = org.apache.maven.plugins.annotations.ResolutionScope.TEST, threadSafe = true)
 public class AotCacheRecordMojo extends AbstractMojo {
 
 	@Parameter(defaultValue = "${project}", readonly = true, required = true)
@@ -78,6 +74,19 @@ public class AotCacheRecordMojo extends AbstractMojo {
 	@Parameter(defaultValue = "aot-cache")
 	private String cacheDirectory = AotCache.CACHE_DIRECTORY;
 
+	/**
+	 * Packages whose tests form the training workload. When empty, the whole test class path
+	 * is scanned.
+	 */
+	@Parameter
+	private List<String> packagesToScan = new ArrayList<>();
+
+	/**
+	 * Whether a failing test should fail the build. Defaults to {@code true}.
+	 */
+	@Parameter(defaultValue = "true")
+	private boolean failOnTestFailure = true;
+
 	@Override
 	public void execute() throws MojoExecutionException {
 		if (this.skip) {
@@ -89,24 +98,117 @@ public class AotCacheRecordMojo extends AbstractMojo {
 			return;
 		}
 		Path cacheFile = resolveCacheFile();
-		String argument = AotCache.recordingArgument(cacheFile);
-		appendToArgLine(argument);
-		getLog().info("Configured AOT cache recording; the test JVM will assemble the cache at " + cacheFile);
+		Path workDirectory = cacheFile.getParent().resolve("classpath");
+		try {
+			Files.createDirectories(workDirectory);
+			List<String> command = buildCommand(cacheFile, workDirectory);
+			getLog().info("Recording AOT cache to " + cacheFile + " (JAR-only class path).");
+			if (getLog().isDebugEnabled()) {
+				getLog().debug("Training command: " + String.join(" ", command));
+			}
+			int exitCode = run(command);
+			if (exitCode != 0) {
+				throw new MojoExecutionException(
+						"AOT cache training run failed with exit code " + exitCode + ". See the output above for details.");
+			}
+		}
+		catch (IOException ex) {
+			throw new MojoExecutionException("Unable to prepare the AOT cache training run", ex);
+		}
+	}
+
+	private List<String> buildCommand(Path cacheFile, Path workDirectory) throws IOException {
+		List<String> command = new ArrayList<>();
+		command.add(javaExecutable());
+		command.add(AotCache.recordingArgument(cacheFile));
+		command.add("-cp");
+		command.add(jarOnlyClasspath(workDirectory));
+		command.add("io.github.vpelikh.aot.trainer.TrainingLauncher");
+		for (String packageName : this.packagesToScan) {
+			command.add("--select-package=" + packageName);
+		}
+		if (!this.failOnTestFailure) {
+			command.add("--no-fail-on-test-failure");
+		}
+		command.add("--allow-empty");
+		return command;
+	}
+
+	/**
+	 * Build a class path with no non-empty directory, as required by the JVM for AOT cache
+	 * recording. Directory entries (for example {@code target/test-classes}) are packaged
+	 * into JARs; JAR entries are kept as-is.
+	 */
+	String jarOnlyClasspath(Path workDirectory) throws IOException {
+		List<Path> elements = new ArrayList<>();
+		try {
+			for (String element : this.project.getTestClasspathElements()) {
+				elements.add(Path.of(element));
+			}
+		}
+		catch (org.apache.maven.artifact.DependencyResolutionRequiredException ex) {
+			throw new IOException("Unable to resolve the test class path", ex);
+		}
+		// The launcher, its core helpers and the JUnit Platform live in the plugin realm.
+		elements.addAll(pluginClasspath());
+		return TrainingClasspath.jarOnlyClasspath(elements, workDirectory);
+	}
+
+	/**
+	 * Collect the launcher, its core helpers and the JUnit Platform launcher API from the
+	 * plugin's own class path, so the training JVM can load the launcher. The test engine
+	 * and JUnit's own commons come from the project's test class path, so no engine is
+	 * duplicated.
+	 */
+	private List<Path> pluginClasspath() {
+		List<Path> elements = new ArrayList<>();
+		addCodeSource(elements, io.github.vpelikh.aot.trainer.TrainingLauncher.class);
+		addCodeSource(elements, AotCache.class);
+		// The JUnit Platform launcher API and its commons/engine helpers are not transitive
+		// from junit-jupiter, so they come from the plugin realm. The Jupiter engine itself
+		// comes from the project's test class path; the versions align because the plugin
+		// depends on the same JUnit Platform generation.
+		addCodeSource(elements, org.junit.platform.launcher.core.LauncherFactory.class);
+		addCodeSource(elements, org.junit.platform.engine.ConfigurationParameters.class);
+		addCodeSource(elements, org.junit.platform.commons.PreconditionViolationException.class);
+		return elements;
+	}
+
+	private void addCodeSource(List<Path> target, Class<?> type) {
+		try {
+			java.security.CodeSource codeSource = type.getProtectionDomain().getCodeSource();
+			if (codeSource != null) {
+				target.add(Path.of(codeSource.getLocation().toURI()));
+			}
+		}
+		catch (Exception ex) {
+			throw new IllegalStateException("Unable to locate the code source for " + type.getName(), ex);
+		}
+	}
+
+	private String javaExecutable() {
+		return Path.of(System.getProperty("java.home"), "bin", "java").toString();
+	}
+
+	private int run(List<String> command) throws IOException {
+		Process process = new ProcessBuilder(command).inheritIO().start();
+		try {
+			return process.waitFor();
+		}
+		catch (InterruptedException ex) {
+			Thread.currentThread().interrupt();
+			throw new IOException("Interrupted while waiting for the AOT cache training run", ex);
+		}
 	}
 
 	Path resolveCacheFile() {
-		return this.project.getBasedir().toPath()
+		return this.project.getBasedir()
+			.toPath()
 			.resolve(this.project.getBuild().getDirectory())
 			.resolve(this.cacheDirectory)
 			.resolve(AotCache.CACHE_FILE_NAME)
 			.toAbsolutePath()
 			.normalize();
-	}
-
-	private void appendToArgLine(String additionalArgument) {
-		String existing = this.project.getProperties().getProperty("argLine", "").trim();
-		String combined = existing.isEmpty() ? additionalArgument : existing + " " + additionalArgument;
-		this.project.getProperties().put("argLine", combined);
 	}
 
 	void setProject(MavenProject project) {
@@ -123,6 +225,14 @@ public class AotCacheRecordMojo extends AbstractMojo {
 
 	void setCacheDirectory(String cacheDirectory) {
 		this.cacheDirectory = cacheDirectory;
+	}
+
+	void setPackagesToScan(List<String> packagesToScan) {
+		this.packagesToScan = packagesToScan;
+	}
+
+	void setFailOnTestFailure(boolean failOnTestFailure) {
+		this.failOnTestFailure = failOnTestFailure;
 	}
 
 }

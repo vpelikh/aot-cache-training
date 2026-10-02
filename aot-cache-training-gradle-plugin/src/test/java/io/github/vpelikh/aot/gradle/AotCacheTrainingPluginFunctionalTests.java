@@ -22,19 +22,24 @@ import java.nio.file.Path;
 
 import org.gradle.testkit.runner.BuildResult;
 import org.gradle.testkit.runner.GradleRunner;
-import org.gradle.testkit.runner.TaskOutcome;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.condition.EnabledIf;
 import org.junit.jupiter.api.io.TempDir;
 
 import static org.assertj.core.api.Assertions.assertThat;
 
 /**
- * Functional tests for {@link AotCacheTrainingPlugin} using Gradle TestKit.
+ * Functional tests for {@link AotCacheTrainingPlugin} using Gradle TestKit. On JDK 25+ the
+ * tests exercise a real AOT cache recording run through the trainer.
  *
  * @author Vasily Pelikh
  */
 class AotCacheTrainingPluginFunctionalTests {
+
+	static boolean jdkSupportsRecording() {
+		return Runtime.version().feature() >= 25;
+	}
 
 	@TempDir
 	Path projectDir;
@@ -42,25 +47,14 @@ class AotCacheTrainingPluginFunctionalTests {
 	@BeforeEach
 	void setUp() throws IOException {
 		write("settings.gradle", """
+				pluginManagement {
+					repositories {
+						gradlePluginPortal()
+						mavenCentral()
+					}
+				}
 				rootProject.name = 'sample'
 				""");
-		write("src/test/java/sample/SampleTests.java", """
-				package sample;
-
-				import org.junit.jupiter.api.Test;
-
-				class SampleTests {
-
-					@Test
-					void passes() {
-					}
-
-				}
-				""");
-	}
-
-	@Test
-	void printsRecordingArgumentWhenEnabled() throws IOException {
 		write("build.gradle", """
 				plugins {
 					id 'java'
@@ -84,22 +78,31 @@ class AotCacheTrainingPluginFunctionalTests {
 				aotCacheTraining {
 					enabled = true
 				}
+				""");
+		write("src/test/java/sample/SampleTests.java", """
+				package sample;
 
-				tasks.register('printTestArgs') {
-					def testTask = tasks.named('test').get()
-					doLast {
-						def contribution = []
-						testTask.jvmArgumentProviders.each { contribution.addAll(it.asArguments()) }
-						println 'JVMARGS=' + (testTask.jvmArgs + contribution).join('|')
+				import org.junit.jupiter.api.Test;
+
+				class SampleTests {
+
+					@Test
+					void passes() {
 					}
+
 				}
 				""");
+	}
 
-		BuildResult result = runner("printTestArgs").build();
+	@Test
+	@EnabledIf("io.github.vpelikh.aot.gradle.AotCacheTrainingPluginFunctionalTests#jdkSupportsRecording")
+	void recordsCacheFromTestsOnJarOnlyClasspath() {
+		BuildResult result = runner("aotCacheTraining", "verifyAotCache").build();
 
-		// The recording flag must be wired to the conventional cache path.
-		assertThat(result.getOutput()).contains("-XX:AOTCacheOutput=");
-		assertThat(result.getOutput()).contains("aot-cache");
+		assertThat(result.task(":aotCacheTraining").getOutcome()).isNotNull();
+		assertThat(result.getOutput()).contains("1 tests successful");
+		assertThat(this.projectDir.resolve("build/aot-cache/application.aot")).exists();
+		assertThat(this.projectDir.resolve("build/aot-cache/application.aot").toFile().length()).isGreaterThan(0);
 	}
 
 	@Test
@@ -125,14 +128,37 @@ class AotCacheTrainingPluginFunctionalTests {
 				}
 				""");
 
-		BuildResult result = runner("test").build();
+		BuildResult result = runner("aotCacheTraining", "verifyAotCache").build();
 
-		assertThat(result.getOutput()).doesNotContain("-XX:AOTCacheOutput=");
-		assertThat(result.task(":test").getOutcome()).isEqualTo(TaskOutcome.SUCCESS);
+		assertThat(result.getOutput()).doesNotContain("Recording an AOT cache");
 	}
 
 	@Test
-	void verifyTaskFailsClosedWhenNoCacheWasRecorded() throws IOException {
+	@EnabledIf("io.github.vpelikh.aot.gradle.AotCacheTrainingPluginFunctionalTests#jdkSupportsRecording")
+	void failingTestsFailTheTrainingRunByDefault() throws IOException {
+		write("src/test/java/sample/SampleTests.java", """
+				package sample;
+
+				import org.junit.jupiter.api.Test;
+
+				class SampleTests {
+
+					@Test
+					void fails() {
+						throw new AssertionError("boom");
+					}
+
+				}
+				""");
+
+		BuildResult result = runner("aotCacheTraining").buildAndFail();
+
+		assertThat(result.getOutput()).contains("1 tests failed");
+	}
+
+	@Test
+	@EnabledIf("io.github.vpelikh.aot.gradle.AotCacheTrainingPluginFunctionalTests#jdkSupportsRecording")
+	void failingTestsDoNotFailWhenFailOnTestFailureIsDisabled() throws IOException {
 		write("build.gradle", """
 				plugins {
 					id 'java'
@@ -155,14 +181,27 @@ class AotCacheTrainingPluginFunctionalTests {
 
 				aotCacheTraining {
 					enabled = true
+					failOnTestFailure = false
+				}
+				""");
+		write("src/test/java/sample/SampleTests.java", """
+				package sample;
+
+				import org.junit.jupiter.api.Test;
+
+				class SampleTests {
+
+					@Test
+					void fails() {
+						throw new AssertionError("boom");
+					}
+
 				}
 				""");
 
-		// No tests run, so no cache is recorded; the verification task must fail closed with
-		// actionable guidance.
-		BuildResult result = runner("verifyAotCache", "-x", "test").buildAndFail();
+		BuildResult result = runner("aotCacheTraining", "verifyAotCache").build();
 
-		assertThat(result.getOutput()).contains("AOT cache recording was enabled");
+		assertThat(this.projectDir.resolve("build/aot-cache/application.aot")).exists();
 	}
 
 	private GradleRunner runner(String... arguments) {

@@ -19,6 +19,8 @@ package io.github.vpelikh.aot.maven;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.List;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -31,8 +33,8 @@ import static org.assertj.core.api.Assertions.assertThat;
  * End-to-end test that runs a real Maven build with the locally published
  * {@code aot-cache-training-maven-plugin} and the {@code aot-cache-training} library.
  *
- * <p>Exercises the full flow: the {@code record} goal injects
- * {@code -XX:AOTCacheOutput} into Surefire's {@code argLine}, a real test JVM records the
+ * <p>Exercises the full flow: the {@code record} goal packages the classes into JARs and
+ * runs the tests through the trainer on a JAR-only class path, a real JVM records the
  * cache, and the {@code verify} goal accepts it.
  *
  * <p>Only runs on JDK 25+, where the single-step recording flag exists.
@@ -52,13 +54,13 @@ class AotCacheMavenIntegrationTests {
 	Path projectDir;
 
 	@BeforeEach
-	void setUp() throws IOException {
+	void setUp() {
 		Path repo = localRepository();
-		assertThat(repo).as("run './gradlew publishAllPublicationsToLocalTestRepository' first").exists();
+		assertThat(repo).as("run './gradlew publishForIntegrationTests' first").exists();
 	}
 
 	@Test
-	void recordsAndVerifiesCacheFromSurefireTests() throws Exception {
+	void recordsAndVerifiesCacheFromTests() throws Exception {
 		writePom();
 		write("src/test/java/sample/SampleTests.java", """
 				package sample;
@@ -79,31 +81,6 @@ class AotCacheMavenIntegrationTests {
 		assertThat(result.exitCode()).as("maven output:%n%s", result.output()).isZero();
 		assertThat(result.output()).contains("Verified AOT cache");
 		assertThat(this.projectDir.resolve("target/aot-cache/application.aot")).exists();
-	}
-
-	@Test
-	void verifyGoalFailsClosedWhenNoCacheRecorded() throws Exception {
-		writePom();
-		write("src/test/java/sample/SampleTests.java", """
-				package sample;
-
-				import org.junit.jupiter.api.Test;
-
-				class SampleTests {
-
-					@Test
-					void passes() {
-					}
-
-				}
-				""");
-
-		// Recording is enabled but the tests are skipped, so no cache is produced and the
-		// verify goal must fail closed.
-		MavenResult result = runMaven("verify", "-Daot.cache.record=true", "-DskipTests");
-
-		assertThat(result.exitCode()).as("maven output:%n%s", result.output()).isNotZero();
-		assertThat(result.output()).contains("no non-empty cache");
 	}
 
 	private void writePom() throws IOException {
@@ -143,12 +120,12 @@ class AotCacheMavenIntegrationTests {
 										<artifactId>aot-cache-training</artifactId>
 										<version>%s</version>
 									</dependency>
+									<dependency>
+										<groupId>io.github.vpelikh</groupId>
+										<artifactId>aot-cache-training-trainer</artifactId>
+										<version>%s</version>
+									</dependency>
 								</dependencies>
-							</plugin>
-							<plugin>
-								<groupId>org.apache.maven.plugins</groupId>
-								<artifactId>maven-surefire-plugin</artifactId>
-								<version>3.5.2</version>
 							</plugin>
 						</plugins>
 					</build>
@@ -161,15 +138,15 @@ class AotCacheMavenIntegrationTests {
 						</dependency>
 					</dependencies>
 				</project>
-				""".formatted(VERSION, VERSION));
+				""".formatted(VERSION, VERSION, VERSION));
 	}
 
 	private MavenResult runMaven(String... goals) throws IOException, InterruptedException {
-		java.util.List<String> command = new java.util.ArrayList<>();
+		List<String> command = new ArrayList<>();
 		command.add(mavenExecutable());
 		command.add("-B");
 		command.add("-Dmaven.repo.local=" + localRepository());
-		command.addAll(java.util.Arrays.asList(goals));
+		command.addAll(List.of(goals));
 
 		Process process = new ProcessBuilder(command).directory(this.projectDir.toFile())
 			.redirectErrorStream(true)

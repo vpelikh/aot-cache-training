@@ -23,15 +23,40 @@ aotCacheTraining {
 	enabled = true
 }
 
-// Boot's bootBuildImage picks up aot-cache/application.aot from the application content,
-// so copying the recorded cache there is enough for the Paketo buildpack to reuse it.
-tasks.register("prepareImageContent", Copy) {
-	dependsOn "aotCacheTraining"
-	from layout.buildDirectory.dir("aot-cache")
-	into layout.buildDirectory.dir("image-content/aot-cache")
-}
-
-bootBuildImage {
-	dependsOn "prepareImageContent"
-	environment = ["BP_JVM_AOTCACHE_ENABLED": "true"]
+// Recording produces build/aot-cache/application.aot.
+//
+// To ship that cache in a container image, place it at aot-cache/application.aot in the
+// application content that you hand to the Paketo Spring Boot buildpack. The buildpack
+// detects it, skips the training run, and loads it at startup with -XX:AOTCache=<path>.
+//
+// For example, with paketo `pack` and a directory that holds the built jar plus the cache:
+//
+//   ./gradlew aotCacheTraining bootJar
+//   mkdir -p build/image-content/aot-cache
+//   cp build/libs/gradle-spring-boot-example-*.jar build/image-content/
+//   cp build/aot-cache/application.aot build/image-content/aot-cache/
+//   pack build my-app --path build/image-content --builder paketobuildpacks/builder-jammy-base
+//
+// The released Spring Boot Gradle plugin cannot inject additional content into
+// bootBuildImage directly, so this handoff is explicit. See the README for details.
+tasks.register("prepareImageContent") {
+	group = "aot"
+	description = "Assembles the application jar and the recorded AOT cache for a container build"
+	dependsOn "aotCacheTraining", "bootJar"
+	doLast {
+		def contentDirectory = layout.buildDirectory.dir("image-content").get().asFile
+		def cacheDirectory = new File(contentDirectory, "aot-cache")
+		cacheDirectory.mkdirs()
+		copy {
+			from layout.buildDirectory.dir("libs")
+			include "*.jar"
+			exclude "*-plain.jar", "*-tests.jar"
+			into contentDirectory
+		}
+		copy {
+			from layout.buildDirectory.file("aot-cache/application.aot")
+			into cacheDirectory
+		}
+		logger.lifecycle("Image content prepared in {}", contentDirectory)
+	}
 }

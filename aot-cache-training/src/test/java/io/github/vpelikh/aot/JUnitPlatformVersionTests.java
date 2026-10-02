@@ -18,6 +18,7 @@ package io.github.vpelikh.aot;
 
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Map;
 
 import org.junit.jupiter.api.Test;
 
@@ -37,7 +38,7 @@ class JUnitPlatformVersionTests {
 
 	@Test
 	void fromCoordinatesPrefersCommons() {
-		java.util.Map<String, String> coordinates = java.util.Map.of(
+		Map<String, String> coordinates = Map.of(
 				"org.junit.jupiter:junit-jupiter", "6.1.3",
 				JUnitPlatformVersion.ENGINE_COORDINATE, "6.1.3",
 				JUnitPlatformVersion.COMMONS_COORDINATE, "6.1.3");
@@ -46,14 +47,14 @@ class JUnitPlatformVersionTests {
 
 	@Test
 	void fromCoordinatesIgnoresUnrelatedModules() {
-		java.util.Map<String, String> coordinates = java.util.Map.of("org.junit.jupiter:junit-jupiter", "6.1.3",
+		Map<String, String> coordinates = Map.of("org.junit.jupiter:junit-jupiter", "6.1.3",
 				"org.springframework:spring-test", "7.0.9");
 		assertThat(JUnitPlatformVersion.fromCoordinates(coordinates)).isEmpty();
 	}
 
 	@Test
 	void fromCoordinatesRejectsClassifierLikeValues() {
-		java.util.Map<String, String> coordinates = java.util.Map.of(JUnitPlatformVersion.COMMONS_COORDINATE,
+		Map<String, String> coordinates = Map.of(JUnitPlatformVersion.COMMONS_COORDINATE,
 				"6.0.3-sources");
 		assertThat(JUnitPlatformVersion.fromCoordinates(coordinates)).isEmpty();
 	}

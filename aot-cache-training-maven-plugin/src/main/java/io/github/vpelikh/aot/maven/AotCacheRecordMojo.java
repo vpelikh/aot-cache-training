@@ -56,6 +56,12 @@ import org.apache.maven.project.MavenProject;
 		requiresDependencyResolution = org.apache.maven.plugins.annotations.ResolutionScope.TEST, threadSafe = true)
 public class AotCacheRecordMojo extends AbstractMojo {
 
+	/**
+	 * Create the mojo. Maven instantiates it and injects the configured parameters.
+	 */
+	public AotCacheRecordMojo() {
+	}
+
 	@Parameter(defaultValue = "${project}", readonly = true, required = true)
 	private MavenProject project;
 

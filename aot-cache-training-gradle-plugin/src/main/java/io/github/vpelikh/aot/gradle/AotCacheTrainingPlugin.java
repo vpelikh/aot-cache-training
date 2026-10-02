@@ -69,6 +69,12 @@ import org.gradle.jvm.tasks.Jar;
 public class AotCacheTrainingPlugin implements Plugin<Project> {
 
 	/**
+	 * Create the plugin. Gradle instantiates it when the plugin is applied.
+	 */
+	public AotCacheTrainingPlugin() {
+	}
+
+	/**
 	 * The name of the task that records the cache.
 	 */
 	public static final String RECORD_TASK_NAME = "aotCacheTraining";

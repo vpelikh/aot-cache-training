@@ -68,6 +68,13 @@ import org.springframework.test.context.support.AbstractTestExecutionListener;
 public class AotCacheTestExecutionListener extends AbstractTestExecutionListener {
 
 	/**
+	 * Create a listener that prepares the training workload when AOT cache recording is
+	 * enabled. Registration is a no-op otherwise.
+	 */
+	public AotCacheTestExecutionListener() {
+	}
+
+	/**
 	 * The {@link #getOrder() order} value for this listener. Ordered after
 	 * {@code CommonCachesTestExecutionListener} (3005) and before
 	 * {@code TransactionalTestExecutionListener} (4000).

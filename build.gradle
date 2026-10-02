@@ -55,6 +55,18 @@ subprojects {
 		useJUnitPlatform()
 	}
 
+	// Keep the published API documentation warning-free. Warnings are errors so a new
+	// undocumented constructor or a broken tag fails the build instead of slipping through.
+	tasks.withType(Javadoc).configureEach {
+		options.encoding = "UTF-8"
+		options.addStringOption("Xdoclint:all", "-quiet")
+		options.addBooleanOption("Werror", true)
+	}
+
+	tasks.named("check") {
+		dependsOn("javadoc")
+	}
+
 	plugins.withId("maven-publish") {
 		// java-gradle-plugin already registers a 'pluginMaven' publication, so only add a
 		// custom publication when one is not already present. Checked after evaluation

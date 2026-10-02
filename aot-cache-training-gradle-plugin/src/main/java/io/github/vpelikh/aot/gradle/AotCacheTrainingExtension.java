@@ -32,6 +32,12 @@ import org.gradle.api.provider.Property;
 public abstract class AotCacheTrainingExtension {
 
 	/**
+	 * Create the extension. Gradle instantiates it and injects the managed properties.
+	 */
+	public AotCacheTrainingExtension() {
+	}
+
+	/**
 	 * Whether AOT cache recording is enabled. Defaults to {@code false} so the plugin is
 	 * inert until a user opts in.
 	 * @return the enabled property

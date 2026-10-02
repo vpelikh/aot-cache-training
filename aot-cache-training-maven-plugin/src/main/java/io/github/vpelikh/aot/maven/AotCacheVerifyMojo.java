@@ -41,6 +41,12 @@ import org.apache.maven.project.MavenProject;
 @Mojo(name = "verify", defaultPhase = LifecyclePhase.VERIFY, threadSafe = true)
 public class AotCacheVerifyMojo extends AbstractMojo {
 
+	/**
+	 * Create the mojo. Maven instantiates it and injects the configured parameters.
+	 */
+	public AotCacheVerifyMojo() {
+	}
+
 	@Parameter(defaultValue = "${project}", readonly = true, required = true)
 	private MavenProject project;
 

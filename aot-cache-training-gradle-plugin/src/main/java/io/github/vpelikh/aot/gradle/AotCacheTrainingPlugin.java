@@ -266,5 +266,4 @@ public class AotCacheTrainingPlugin implements Plugin<Project> {
 		return coordinates;
 	}
 
-
 }

@@ -191,15 +191,15 @@ build against it.
 
 ## Releasing
 
-Publishing is driven by the `release` workflow. Push a tag (for example `v0.1.0`) or run the
-workflow manually with a version, and it will:
+Publishing is driven by the `release` workflow, run manually from the Actions tab
+(**Run workflow**) with an optional version, defaulting to the one in `gradle.properties`. It:
 
-1. build and verify the project,
-2. publish every module to Maven Central via the Sonatype Central Portal, and
-3. publish the Gradle plugin to the Gradle Plugin Portal.
-
-The Maven Central deployment is uploaded as `USER_MANAGED`: it is validated automatically but
-still needs a manual "Publish" click on the [Central Portal](https://central.sonatype.com/publishing/deployments).
+1. builds and verifies the project,
+2. publishes every module to Maven Central via the Sonatype Central Portal (the deployment is
+   released automatically, no manual step),
+3. publishes the Gradle plugin to the Gradle Plugin Portal,
+4. creates the `vX.Y.Z` tag and a GitHub release with generated notes, and
+5. bumps the patch version in `gradle.properties` and pushes it, so the next release is ready.
 
 The workflow reads these repository secrets:
 
@@ -207,6 +207,7 @@ The workflow reads these repository secrets:
 | --- | --- |
 | `CENTRAL_PORTAL_USERNAME` / `CENTRAL_PORTAL_PASSWORD` | Sonatype Central Portal user token. |
 | `SIGNING_KEY` | ASCII-armored GPG private key used to sign the Maven Central artifacts. |
+| `SIGNING_PASSWORD` | Passphrase for `SIGNING_KEY`. |
 | `GRADLE_PUBLISH_KEY` / `GRADLE_PUBLISH_SECRET` | Gradle Plugin Portal API key. |
 
 ## License

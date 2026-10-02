@@ -84,9 +84,19 @@ public final class TrainingLauncher {
 		}
 
 		LauncherDiscoveryRequest request = buildRequest(arguments);
-		Launcher launcher = LauncherFactory.create();
 		SummaryGeneratingListener listener = new SummaryGeneratingListener();
-		launcher.execute(request, listener);
+		try {
+			Launcher launcher = LauncherFactory.create();
+			launcher.execute(request, listener);
+		}
+		catch (org.junit.platform.commons.PreconditionViolationException ex) {
+			System.err.println("[aot-cache-training] No JUnit test engine was found on the training class path, so "
+					+ "no tests can run and no cache can be recorded. Add an engine such as "
+					+ "org.junit.jupiter:junit-jupiter (or junit-jupiter-engine) as a test dependency. Details: "
+					+ ex.getMessage());
+			System.exit(2);
+			return;
+		}
 
 		TestExecutionSummary summary = listener.getSummary();
 		PrintWriter writer = new PrintWriter(System.out, true);

@@ -188,7 +188,7 @@ public class AotCacheTrainingPlugin implements Plugin<Project> {
 		// and the test engine are never mixed across generations.
 		classpath.from(project.getProviders().provider(() -> {
 			List<File> launcher = new ArrayList<>();
-			addCodeSource(launcher, AotCache.class);
+			launcher.add(launcherJar(AotCache.class));
 			boolean projectHasLauncher = test.getRuntimeClasspath()
 				.getFiles()
 				.stream()
@@ -198,8 +198,8 @@ public class AotCacheTrainingPlugin implements Plugin<Project> {
 			}
 			return launcher.stream().distinct().toList();
 		}));
-		classpath.from(project.getProviders().provider(
-				() -> List.of(launcherJar(io.github.vpelikh.aot.trainer.TrainingLauncher.class))));
+		classpath.from(project.getProviders()
+			.provider(() -> List.of(launcherJar(io.github.vpelikh.aot.trainer.TrainingLauncher.class))));
 		task.setClasspath(classpath);
 		task.getArgumentProviders().add(new AotCacheArgsProvider(extension));
 		task.getJvmArgumentProviders()
@@ -208,14 +208,10 @@ public class AotCacheTrainingPlugin implements Plugin<Project> {
 	}
 
 	/**
-	 * Add the JAR or classes directory that declares the given class.
-	 * @param target the list to add to
-	 * @param type a class from the component to add
+	 * Return the JAR that declares the given class, on the plugin's own class path.
+	 * @param type a class from the component
+	 * @return the JAR or classes directory
 	 */
-	private static void addCodeSource(List<File> target, Class<?> type) {
-		target.add(launcherJar(type));
-	}
-
 	private static File launcherJar(Class<?> type) {
 		try {
 			java.security.CodeSource codeSource = type.getProtectionDomain().getCodeSource();

@@ -75,6 +75,42 @@ class TrainingLauncherIntegrationTests {
 		assertThat(result.output()).contains("No tests were discovered");
 	}
 
+	@Test
+	void failsWithClearMessageWhenNoTestEngineIsPresent(@TempDir Path tempDir) throws Exception {
+		Path cacheFile = tempDir.resolve("aot-cache").resolve("application.aot");
+		Files.createDirectories(cacheFile.getParent());
+
+		// Start a JVM whose class path has the launcher but no test engine.
+		List<String> command = new ArrayList<>();
+		command.add(Path.of(System.getProperty("java.home"), "bin", "java").toString());
+		command.add("-XX:AOTCacheOutput=" + cacheFile);
+		command.add("-cp");
+		command.add(launcherAndPlatformOnly());
+		command.add(TrainingLauncher.class.getName());
+		Process process = new ProcessBuilder(command).redirectErrorStream(true).start();
+		String output = new String(process.getInputStream().readAllBytes());
+		int exitCode = process.waitFor();
+
+		assertThat(exitCode).as("output:%n%s", output).isEqualTo(2);
+		assertThat(output).contains("No JUnit test engine was found");
+	}
+
+	/**
+	 * A class path with the launcher and JUnit Platform but no engine, so launcher creation
+	 * fails.
+	 */
+	private String launcherAndPlatformOnly() throws IOException {
+		List<String> kept = new ArrayList<>();
+		kept.add(System.getProperty("aot.test.classesJar"));
+		kept.add(System.getProperty("aot.test.coreJar"));
+		for (String entry : System.getProperty("aot.test.runtimeClasspath", "").split(File.pathSeparator)) {
+			if (entry.contains("junit-platform-") || entry.contains("opentest4j") || entry.contains("apiguardian")) {
+				kept.add(entry);
+			}
+		}
+		return String.join(File.pathSeparator, kept);
+	}
+
 	private ProcessResult runJvm(List<String> jvmArgs, List<String> programArgs) throws IOException {
 		List<String> command = new ArrayList<>();
 		command.add(Path.of(System.getProperty("java.home"), "bin", "java").toString());

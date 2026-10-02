@@ -72,9 +72,8 @@ public class AotCacheVerifyMojo extends AbstractMojo {
 		long size = AotCache.verifyRecordedCache(cacheFile);
 		if (size <= 0) {
 			throw new MojoExecutionException("AOT cache recording was enabled (aot.cache.record=true) but no "
-					+ "non-empty cache was found at " + cacheFile + ". Run the tests on JDK "
-					+ AotCache.MINIMUM_RECORDING_JDK
-					+ "+ and make sure the test JVM exits cleanly (no System.exit during the run).");
+					+ "non-empty cache was found at " + cacheFile + ". The training run needs JDK "
+					+ AotCache.MINIMUM_RECORDING_JDK + "+ and a clean exit; see the 'record' goal output above.");
 		}
 		getLog().info("Verified AOT cache at " + cacheFile + " (" + size + " bytes).");
 	}

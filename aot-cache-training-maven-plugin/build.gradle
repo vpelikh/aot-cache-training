@@ -1,0 +1,55 @@
+/*
+ * Copyright 2026-present the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+plugins {
+	id "java-library"
+	id "maven-publish"
+	alias(libs.plugins.maven.plugin.development)
+}
+
+description = "Maven plugin that records a JVM AOT cache from integration tests"
+
+mavenPlugin {
+	goalPrefix = "aot-cache-training"
+}
+
+dependencies {
+	implementation(project(":aot-cache-training"))
+
+	compileOnly(libs.maven.plugin.api)
+	compileOnly(libs.maven.core)
+	compileOnly(libs.maven.plugin.annotations)
+
+	testImplementation(libs.maven.plugin.api)
+	testImplementation(libs.maven.core)
+	testImplementation(libs.maven.plugin.annotations)
+	testImplementation(libs.junit.jupiter)
+	testRuntimeOnly(libs.junit.platform.launcher)
+	testImplementation(libs.assertj.core)
+}
+
+// The Maven descriptor generator (maven-plugin-tools 3.15) cannot read JDK 25 class
+// files, so compile this module to an older release. The runtime behaviour is
+// unaffected: the recording flag is understood by the JDK that runs the tests.
+tasks.withType(JavaCompile).configureEach {
+	options.release = 17
+}
+
+// The end-to-end integration tests run a real Maven build that resolves this plugin and
+// the library from the shared local repository, so publish them first.
+tasks.named("test") {
+	dependsOn(":publishForIntegrationTests")
+}

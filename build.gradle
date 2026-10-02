@@ -20,8 +20,17 @@ plugins {
 
 description = "AOT cache training for integration tests"
 
+// Aggregates publishing of every module to the shared local test repository; used by the
+// Maven integration tests.
+tasks.register("publishForIntegrationTests") {
+	group = "verification"
+	description = "Publishes all modules to the local test repository for integration tests"
+	dependsOn subprojects.collect { "${it.path}:publishAllPublicationsToLocalTestRepository" }
+}
+
 subprojects {
 	apply plugin: "java-library"
+	apply plugin: "maven-publish"
 
 	group = rootProject.group
 	version = rootProject.version
@@ -43,5 +52,42 @@ subprojects {
 
 	tasks.withType(Test).configureEach {
 		useJUnitPlatform()
+	}
+
+	plugins.withId("maven-publish") {
+		// java-gradle-plugin already registers a 'pluginMaven' publication, so only add a
+		// custom publication when one is not already present.
+		if (!plugins.hasPlugin("java-gradle-plugin")) {
+			publishing {
+				publications {
+					"$name"(MavenPublication) {
+						groupId = rootProject.group
+						artifactId = project.name
+						version = project.version
+						from components.java
+						pom {
+							name = project.name
+							description = project.description
+							licenses {
+								license {
+									name = "Apache License, Version 2.0"
+									url = "https://www.apache.org/licenses/LICENSE-2.0.txt"
+								}
+							}
+						}
+					}
+				}
+			}
+		}
+		publishing {
+			repositories {
+				maven {
+					name = "localTest"
+					// A single shared repository at the root, so the Maven integration tests
+					// can consume every module via -Dmaven.repo.local.
+					url = rootProject.layout.buildDirectory.dir("local-repo")
+				}
+			}
+		}
 	}
 }

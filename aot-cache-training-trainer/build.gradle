@@ -1,0 +1,50 @@
+/*
+ * Copyright 2026-present the original author or authors.
+ *
+ * Licensed under the Apache License, Version 2.0 (the "License");
+ * you may not use this file except in compliance with the License.
+ * You may obtain a copy of the License at
+ *
+ *      https://www.apache.org/licenses/LICENSE-2.0
+ *
+ * Unless required by applicable law or agreed to in writing, software
+ * distributed under the License is distributed on an "AS IS" BASIS,
+ * WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+ * See the License for the specific language governing permissions and
+ * limitations under the License.
+ */
+
+plugins {
+	id "java-library"
+}
+
+description = "JUnit Platform entry point that runs the tests used as an AOT cache training workload"
+
+dependencies {
+	api(project(":aot-cache-training"))
+	api("org.junit.platform:junit-platform-launcher:1.14.4")
+	api("org.junit.platform:junit-platform-engine:1.14.4")
+	api("org.junit.platform:junit-platform-commons:1.14.4")
+
+	testImplementation(libs.junit.jupiter)
+	testRuntimeOnly(libs.junit.platform.launcher)
+	testImplementation(libs.assertj.core)
+}
+
+// Package the test fixtures and the production classes into a JAR so the end-to-end test
+// can run the launcher on a JAR-only class path, exactly as the build plugins arrange for
+// real projects.
+tasks.register("trainingClassesJar", Jar) {
+	archiveClassifier = "training"
+	from sourceSets.main.output
+	from sourceSets.test.output
+}
+
+tasks.named("test") {
+	systemProperty "aot.test.runtimeClasspath", sourceSets.test.runtimeClasspath.filter {
+		it.name.endsWith(".jar")
+	}.asPath
+	systemProperty "aot.test.classesJar", tasks.named("trainingClassesJar", Jar).get().archiveFile.get().asFile.absolutePath
+	systemProperty "aot.test.coreJar", project(":aot-cache-training").tasks.named("jar", Jar).get().archiveFile.get().asFile.absolutePath
+	dependsOn "trainingClassesJar", ":aot-cache-training:jar"
+}

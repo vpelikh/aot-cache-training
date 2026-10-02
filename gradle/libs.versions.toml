@@ -13,7 +13,8 @@ spring-test = { module = "org.springframework:spring-test", version.ref = "sprin
 spring-context = { module = "org.springframework:spring-context", version.ref = "spring" }
 spring-core = { module = "org.springframework:spring-core", version.ref = "spring" }
 junit-jupiter = { module = "org.junit.jupiter:junit-jupiter", version.ref = "junit" }
-junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher" }
+junit-platform-launcher = { module = "org.junit.platform:junit-platform-launcher", version = "1.14.4" }
+junit-platform-engine = { module = "org.junit.platform:junit-platform-engine", version = "1.14.4" }
 assertj-core = { module = "org.assertj:assertj-core", version.ref = "assertj" }
 mockito-core = { module = "org.mockito:mockito-core", version.ref = "mockito" }
 maven-plugin-api = { module = "org.apache.maven:maven-plugin-api", version.ref = "maven" }

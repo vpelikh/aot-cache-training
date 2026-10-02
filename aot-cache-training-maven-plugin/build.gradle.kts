@@ -15,15 +15,15 @@
  */
 
 plugins {
-	id "java-library"
-	id "maven-publish"
+	`java-library`
+	`maven-publish`
 	alias(libs.plugins.maven.plugin.development)
 }
 
 description = "Maven plugin that records a JVM AOT cache from integration tests"
 
-mavenPlugin {
-	goalPrefix = "aot-cache-training"
+extensions.configure<org.gradlex.maven.plugin.development.MavenPluginDevelopmentExtension> {
+	goalPrefix.set("aot-cache-training")
 }
 
 dependencies {
@@ -47,12 +47,12 @@ dependencies {
 // The Maven descriptor generator (maven-plugin-tools 3.16) cannot read JDK 25 class
 // files (major version 69), so compile this module to an older release. The published
 // plugin still runs on JDK 25; only its bytecode target is older.
-tasks.withType(JavaCompile).configureEach {
+tasks.withType<JavaCompile>().configureEach {
 	options.release = 17
 }
 
 // The end-to-end integration tests run a real Maven build that resolves this plugin and
 // the library from the shared local repository, so publish them first.
-tasks.named("test") {
+tasks.named<Test>("test") {
 	dependsOn(":publishForIntegrationTests")
 }

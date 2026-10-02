@@ -1,7 +1,7 @@
 plugins {
-	id "java"
-	id "org.springframework.boot" version "4.1.1"
-	id "io.github.vpelikh.aot-cache-training"
+	java
+	id("org.springframework.boot") version "4.1.1"
+	id("io.github.vpelikh.aot-cache-training")
 }
 
 repositories {
@@ -9,13 +9,13 @@ repositories {
 }
 
 dependencies {
-	implementation platform("org.springframework.boot:spring-boot-dependencies:4.1.1")
-	implementation "org.springframework.boot:spring-boot-starter-web"
-	testImplementation "org.springframework.boot:spring-boot-starter-test"
-	testRuntimeOnly "org.junit.platform:junit-platform-launcher"
+	implementation(platform("org.springframework.boot:spring-boot-dependencies:4.1.1"))
+	implementation("org.springframework.boot:spring-boot-starter-web")
+	testImplementation("org.springframework.boot:spring-boot-starter-test")
+	testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 }
 
-test {
+tasks.test {
 	useJUnitPlatform()
 }
 
@@ -42,20 +42,20 @@ aotCacheTraining {
 tasks.register("prepareImageContent") {
 	group = "aot"
 	description = "Assembles the application jar and the recorded AOT cache for a container build"
-	dependsOn "aotCacheTraining", "bootJar"
+	dependsOn("aotCacheTraining", "bootJar")
 	doLast {
-		def contentDirectory = layout.buildDirectory.dir("image-content").get().asFile
-		def cacheDirectory = new File(contentDirectory, "aot-cache")
+		val contentDirectory = layout.buildDirectory.dir("image-content").get().asFile
+		val cacheDirectory = File(contentDirectory, "aot-cache")
 		cacheDirectory.mkdirs()
 		copy {
-			from layout.buildDirectory.dir("libs")
-			include "*.jar"
-			exclude "*-plain.jar", "*-tests.jar"
-			into contentDirectory
+			from(layout.buildDirectory.dir("libs"))
+			include("*.jar")
+			exclude("*-plain.jar", "*-tests.jar")
+			into(contentDirectory)
 		}
 		copy {
-			from layout.buildDirectory.file("aot-cache/application.aot")
-			into cacheDirectory
+			from(layout.buildDirectory.file("aot-cache/application.aot"))
+			into(cacheDirectory)
 		}
 		logger.lifecycle("Image content prepared in {}", contentDirectory)
 	}

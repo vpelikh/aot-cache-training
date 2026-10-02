@@ -46,19 +46,19 @@ class AotCacheTrainingPluginFunctionalTests {
 
 	@BeforeEach
 	void setUp() throws IOException {
-		write("settings.gradle", """
+		write("settings.gradle.kts", """
 				pluginManagement {
 					repositories {
 						gradlePluginPortal()
 						mavenCentral()
 					}
 				}
-				rootProject.name = 'sample'
+				rootProject.name = "sample"
 				""");
-		write("build.gradle", """
+		write("build.gradle.kts", """
 				plugins {
-					id 'java'
-					id 'io.github.vpelikh.aot-cache-training'
+					java
+					id("io.github.vpelikh.aot-cache-training")
 				}
 
 				repositories {
@@ -66,12 +66,12 @@ class AotCacheTrainingPluginFunctionalTests {
 				}
 
 				dependencies {
-					testImplementation platform('org.junit:junit-bom:6.1.3')
-					testImplementation 'org.junit.jupiter:junit-jupiter'
-					testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+					testImplementation(platform("org.junit:junit-bom:6.1.3"))
+					testImplementation("org.junit.jupiter:junit-jupiter")
+					testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 				}
 
-				test {
+				tasks.test {
 					useJUnitPlatform()
 				}
 
@@ -107,10 +107,10 @@ class AotCacheTrainingPluginFunctionalTests {
 
 	@Test
 	void recordingIsInertWhenDisabled() throws IOException {
-		write("build.gradle", """
+		write("build.gradle.kts", """
 				plugins {
-					id 'java'
-					id 'io.github.vpelikh.aot-cache-training'
+					java
+					id("io.github.vpelikh.aot-cache-training")
 				}
 
 				repositories {
@@ -118,12 +118,12 @@ class AotCacheTrainingPluginFunctionalTests {
 				}
 
 				dependencies {
-					testImplementation platform('org.junit:junit-bom:6.1.3')
-					testImplementation 'org.junit.jupiter:junit-jupiter'
-					testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+					testImplementation(platform("org.junit:junit-bom:6.1.3"))
+					testImplementation("org.junit.jupiter:junit-jupiter")
+					testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 				}
 
-				test {
+				tasks.test {
 					useJUnitPlatform()
 				}
 				""");
@@ -159,10 +159,10 @@ class AotCacheTrainingPluginFunctionalTests {
 	@Test
 	@EnabledIf("io.github.vpelikh.aot.gradle.AotCacheTrainingPluginFunctionalTests#jdkSupportsRecording")
 	void failingTestsDoNotFailWhenFailOnTestFailureIsDisabled() throws IOException {
-		write("build.gradle", """
+		write("build.gradle.kts", """
 				plugins {
-					id 'java'
-					id 'io.github.vpelikh.aot-cache-training'
+					java
+					id("io.github.vpelikh.aot-cache-training")
 				}
 
 				repositories {
@@ -170,12 +170,12 @@ class AotCacheTrainingPluginFunctionalTests {
 				}
 
 				dependencies {
-					testImplementation platform('org.junit:junit-bom:6.1.3')
-					testImplementation 'org.junit.jupiter:junit-jupiter'
-					testRuntimeOnly 'org.junit.platform:junit-platform-launcher'
+					testImplementation(platform("org.junit:junit-bom:6.1.3"))
+					testImplementation("org.junit.jupiter:junit-jupiter")
+					testRuntimeOnly("org.junit.platform:junit-platform-launcher")
 				}
 
-				test {
+				tasks.test {
 					useJUnitPlatform()
 				}
 

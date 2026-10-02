@@ -15,7 +15,7 @@
  */
 
 plugins {
-	id "base"
+	base
 }
 
 description = "AOT cache training for integration tests"
@@ -25,17 +25,17 @@ description = "AOT cache training for integration tests"
 tasks.register("publishForIntegrationTests") {
 	group = "verification"
 	description = "Publishes all modules to the local test repository for integration tests"
-	dependsOn subprojects.collect { "${it.path}:publishAllPublicationsToLocalTestRepository" }
+	dependsOn(subprojects.map { "${it.path}:publishAllPublicationsToLocalTestRepository" })
 }
 
 subprojects {
-	apply plugin: "java-library"
-	apply plugin: "maven-publish"
+	apply(plugin = "java-library")
+	apply(plugin = "maven-publish")
 
 	group = rootProject.group
 	version = rootProject.version
 
-	java {
+	extensions.configure<JavaPluginExtension> {
 		toolchain {
 			languageVersion = JavaLanguageVersion.of(25)
 		}
@@ -45,22 +45,24 @@ subprojects {
 	// Published bytecode targets an older release so the artifacts load on any JVM.
 	// The AOT-cache listener itself only activates on JDK 25+, where the single-step
 	// -XX:AOTCacheOutput flag is understood.
-	tasks.withType(JavaCompile).configureEach {
+	tasks.withType<JavaCompile>().configureEach {
 		options.release = 17
 		options.encoding = "UTF-8"
-		options.compilerArgs.addAll(["-Xlint:all,-processing"])
+		options.compilerArgs.addAll(listOf("-Xlint:all,-processing"))
 	}
 
-	tasks.withType(Test).configureEach {
+	tasks.withType<Test>().configureEach {
 		useJUnitPlatform()
 	}
 
 	// Keep the published API documentation warning-free. Warnings are errors so a new
 	// undocumented constructor or a broken tag fails the build instead of slipping through.
-	tasks.withType(Javadoc).configureEach {
+	tasks.withType<Javadoc>().configureEach {
 		options.encoding = "UTF-8"
-		options.addStringOption("Xdoclint:all", "-quiet")
-		options.addBooleanOption("Werror", true)
+		(options as StandardJavadocDocletOptions).apply {
+			addStringOption("Xdoclint:all", "-quiet")
+			addBooleanOption("Werror", true)
+		}
 	}
 
 	tasks.named("check") {
@@ -73,20 +75,20 @@ subprojects {
 		// because plugin application order is not guaranteed.
 		afterEvaluate {
 			if (!plugins.hasPlugin("java-gradle-plugin")) {
-				publishing {
+				extensions.configure<PublishingExtension> {
 					publications {
-						"$name"(MavenPublication) {
-							groupId = rootProject.group
+						create<MavenPublication>(project.name) {
+							groupId = rootProject.group.toString()
 							artifactId = project.name
-							version = project.version
-							from components.java
+							version = project.version.toString()
+							from(components["java"])
 							pom {
-								name = project.name
-								description = project.description
+								name.set(project.name)
+								description.set(project.description)
 								licenses {
 									license {
-										name = "Apache License, Version 2.0"
-										url = "https://www.apache.org/licenses/LICENSE-2.0.txt"
+										name.set("Apache License, Version 2.0")
+										url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
 									}
 								}
 							}
@@ -95,13 +97,13 @@ subprojects {
 				}
 			}
 		}
-		publishing {
+		extensions.configure<PublishingExtension> {
 			repositories {
 				maven {
 					name = "localTest"
 					// A single shared repository at the root, so the Maven integration tests
 					// can consume every module via -Dmaven.repo.local.
-					url = rootProject.layout.buildDirectory.dir("local-repo")
+					url = uri(rootProject.layout.buildDirectory.dir("local-repo"))
 				}
 			}
 		}

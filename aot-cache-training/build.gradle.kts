@@ -15,7 +15,7 @@
  */
 
 plugins {
-	id "java-library"
+	`java-library`
 }
 
 description = "JVM AOT cache recording for Spring integration tests"
@@ -36,25 +36,25 @@ dependencies {
 // Package the main and test classes into a single JAR so the end-to-end recording test
 // can run on a JAR-only classpath. The JVM only caches classes loaded from JARs, not
 // from directories.
-tasks.register("trainingClassesJar", Jar) {
+tasks.register<Jar>("trainingClassesJar") {
 	archiveClassifier = "training"
-	from sourceSets.main.output
-	from sourceSets.test.output
+	from(sourceSets["main"].output)
+	from(sourceSets["test"].output)
 }
 
-tasks.named("test") {
+tasks.named<Test>("test") {
 	// The recording tests need the JDK 25 single-step flag; the rest of the suite
 	// runs without it.
-	systemProperty "java.awt.headless", "true"
+	systemProperty("java.awt.headless", "true")
 	// Expose a JAR-only classpath so the end-to-end test can run the training JVM the
 	// way a packaged application would (JVM AOT caching skips directory classpath entries).
-	systemProperty "aot.test.runtimeClasspath", sourceSets.test.runtimeClasspath.filter {
+	systemProperty("aot.test.runtimeClasspath", sourceSets["test"].runtimeClasspath.filter {
 		it.name.endsWith(".jar")
-	}.asPath
-	systemProperty "aot.test.classesJar", tasks.named("trainingClassesJar", Jar).get().archiveFile.get().asFile.absolutePath
+	}.asPath)
+	systemProperty("aot.test.classesJar", tasks.named<Jar>("trainingClassesJar").get().archiveFile.get().asFile.absolutePath)
 	// Lets a test assert that JUnitPlatformVersion.DEFAULT_PLATFORM_VERSION stays in step
 	// with the version catalog.
-	systemProperty "aot.test.junitPlatformVersion", libs.versions.junitPlatform.get()
+	systemProperty("aot.test.junitPlatformVersion", libs.versions.junitPlatform.get())
 	// Recording tests reassemble classes into a JAR and fork JVMs.
-	dependsOn "trainingClassesJar"
+	dependsOn("trainingClassesJar")
 }

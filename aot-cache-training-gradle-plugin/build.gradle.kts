@@ -15,8 +15,8 @@
  */
 
 plugins {
-	id "java-gradle-plugin"
-	id "maven-publish"
+	`java-gradle-plugin`
+	`maven-publish`
 }
 
 description = "Gradle plugin that records a JVM AOT cache from integration tests"
@@ -35,7 +35,7 @@ dependencies {
 
 gradlePlugin {
 	plugins {
-		aotCacheTraining {
+		create("aotCacheTraining") {
 			id = "io.github.vpelikh.aot-cache-training"
 			displayName = "AOT cache training"
 			description = "Records a JVM AOT cache from integration tests by injecting -XX:AOTCacheOutput"

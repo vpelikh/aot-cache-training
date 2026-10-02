@@ -15,7 +15,7 @@
  */
 
 plugins {
-	id "java-library"
+	`java-library`
 }
 
 description = "JUnit Platform entry point that runs the tests used as an AOT cache training workload"
@@ -43,17 +43,17 @@ dependencies {
 // Package the test fixtures and the production classes into a JAR so the end-to-end test
 // can run the launcher on a JAR-only class path, exactly as the build plugins arrange for
 // real projects.
-tasks.register("trainingClassesJar", Jar) {
+tasks.register<Jar>("trainingClassesJar") {
 	archiveClassifier = "training"
-	from sourceSets.main.output
-	from sourceSets.test.output
+	from(sourceSets["main"].output)
+	from(sourceSets["test"].output)
 }
 
-tasks.named("test") {
-	systemProperty "aot.test.runtimeClasspath", sourceSets.test.runtimeClasspath.filter {
+tasks.named<Test>("test") {
+	systemProperty("aot.test.runtimeClasspath", sourceSets["test"].runtimeClasspath.filter {
 		it.name.endsWith(".jar")
-	}.asPath
-	systemProperty "aot.test.classesJar", tasks.named("trainingClassesJar", Jar).get().archiveFile.get().asFile.absolutePath
-	systemProperty "aot.test.coreJar", project(":aot-cache-training").tasks.named("jar", Jar).get().archiveFile.get().asFile.absolutePath
-	dependsOn "trainingClassesJar", ":aot-cache-training:jar"
+	}.asPath)
+	systemProperty("aot.test.classesJar", tasks.named<Jar>("trainingClassesJar").get().archiveFile.get().asFile.absolutePath)
+	systemProperty("aot.test.coreJar", project(":aot-cache-training").tasks.named<Jar>("jar").get().archiveFile.get().asFile.absolutePath)
+	dependsOn("trainingClassesJar", ":aot-cache-training:jar")
 }

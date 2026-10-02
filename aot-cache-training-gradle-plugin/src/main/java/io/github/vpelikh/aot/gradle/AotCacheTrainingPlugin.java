@@ -19,7 +19,9 @@ package io.github.vpelikh.aot.gradle;
 import java.io.File;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import io.github.vpelikh.aot.AotCache;
 import io.github.vpelikh.aot.JUnitPlatformVersion;
@@ -252,8 +254,8 @@ public class AotCacheTrainingPlugin implements Plugin<Project> {
 	 * @param test the test source set
 	 * @return the coordinate map
 	 */
-	private static java.util.Map<String, String> dependencyCoordinates(Project project, SourceSet test) {
-		java.util.Map<String, String> coordinates = new java.util.LinkedHashMap<>();
+	private static Map<String, String> dependencyCoordinates(Project project, SourceSet test) {
+		Map<String, String> coordinates = new LinkedHashMap<>();
 		org.gradle.api.artifacts.Configuration configuration = project.getConfigurations()
 			.getByName(test.getRuntimeClasspathConfigurationName());
 		for (org.gradle.api.artifacts.ResolvedArtifact artifact : configuration.getResolvedConfiguration()

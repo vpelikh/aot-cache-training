@@ -20,7 +20,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
+import java.util.Map;
 
 import io.github.vpelikh.aot.AotCache;
 import io.github.vpelikh.aot.JUnitPlatformVersion;
@@ -231,8 +233,8 @@ public class AotCacheRecordMojo extends AbstractMojo {
 	 * Platform version can be read from dependency metadata rather than file names.
 	 * @return the coordinate map
 	 */
-	private java.util.Map<String, String> dependencyCoordinates() {
-		java.util.Map<String, String> coordinates = new java.util.LinkedHashMap<>();
+	private Map<String, String> dependencyCoordinates() {
+		Map<String, String> coordinates = new LinkedHashMap<>();
 		for (org.apache.maven.artifact.Artifact artifact : this.project.getArtifacts()) {
 			coordinates.putIfAbsent(artifact.getGroupId() + ":" + artifact.getArtifactId(), artifact.getVersion());
 		}

@@ -18,6 +18,7 @@ plugins {
     `java-library`
     `maven-publish`
     alias(libs.plugins.maven.plugin.development)
+    alias(libs.plugins.vanniktech.maven.publish)
 }
 
 description = "Maven plugin that records a JVM AOT cache from integration tests"

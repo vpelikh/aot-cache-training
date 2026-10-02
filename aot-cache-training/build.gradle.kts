@@ -16,6 +16,7 @@
 
 plugins {
     `java-library`
+    alias(libs.plugins.vanniktech.maven.publish)
 }
 
 description = "JVM AOT cache recording for Spring integration tests"

@@ -17,6 +17,8 @@
 plugins {
     `java-gradle-plugin`
     `maven-publish`
+    alias(libs.plugins.vanniktech.maven.publish)
+    alias(libs.plugins.plugin.publish)
 }
 
 description = "Gradle plugin that records a JVM AOT cache from integration tests"
@@ -34,12 +36,15 @@ dependencies {
 }
 
 gradlePlugin {
+    website = "https://github.com/vpelikh/aot-cache-training"
+    vcsUrl = "https://github.com/vpelikh/aot-cache-training.git"
     plugins {
         create("aotCacheTraining") {
             id = "io.github.vpelikh.aot-cache-training"
             displayName = "AOT cache training"
             description = "Records a JVM AOT cache from integration tests by injecting -XX:AOTCacheOutput"
             implementationClass = "io.github.vpelikh.aot.gradle.AotCacheTrainingPlugin"
+            tags.set(listOf("aot", "cache", "jvm", "testing", "jvm-aot-cache"))
         }
     }
 }

@@ -16,6 +16,7 @@
 
 plugins {
     `java-library`
+    alias(libs.plugins.vanniktech.maven.publish)
 }
 
 description = "JUnit Platform entry point that runs the tests used as an AOT cache training workload"

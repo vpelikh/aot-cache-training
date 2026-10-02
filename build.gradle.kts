@@ -16,6 +16,9 @@
 
 plugins {
     base
+    // Applied to each module below; declared here so the alias is on the build class path.
+    alias(libs.plugins.vanniktech.maven.publish) apply false
+    alias(libs.plugins.plugin.publish) apply false
 }
 
 description = "AOT cache training for integration tests"
@@ -70,40 +73,46 @@ subprojects {
     }
 
     plugins.withId("maven-publish") {
-        // java-gradle-plugin already registers a 'pluginMaven' publication, so only add a
-        // custom publication when one is not already present. Checked after evaluation
-        // because plugin application order is not guaranteed.
-        afterEvaluate {
-            if (!plugins.hasPlugin("java-gradle-plugin")) {
-                extensions.configure<PublishingExtension> {
-                    publications {
-                        create<MavenPublication>(project.name) {
-                            groupId = rootProject.group.toString()
-                            artifactId = project.name
-                            version = project.version.toString()
-                            from(components["java"])
-                            pom {
-                                name.set(project.name)
-                                description.set(project.description)
-                                licenses {
-                                    license {
-                                        name.set("Apache License, Version 2.0")
-                                        url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
-                                    }
-                                }
-                            }
-                        }
-                    }
-                }
-            }
-        }
+        // The local test repository is used by the Maven plugin's integration tests, which
+        // consume every module via -Dmaven.repo.local.
         extensions.configure<PublishingExtension> {
             repositories {
                 maven {
                     name = "localTest"
-                    // A single shared repository at the root, so the Maven integration tests
-                    // can consume every module via -Dmaven.repo.local.
                     url = uri(rootProject.layout.buildDirectory.dir("local-repo"))
+                }
+            }
+        }
+    }
+
+    // Publishing metadata common to every module. Only populated when the vanniktech
+    // Maven publish plugin is applied, which owns the publications and signing.
+    plugins.withId("com.vanniktech.maven.publish") {
+        extensions.configure<PublishingExtension> {
+            publications.withType<MavenPublication>().configureEach {
+                pom {
+                    name.set(project.name)
+                    description.set(project.description)
+                    url.set("https://github.com/vpelikh/aot-cache-training")
+                    licenses {
+                        license {
+                            name.set("Apache License, Version 2.0")
+                            url.set("https://www.apache.org/licenses/LICENSE-2.0.txt")
+                            distribution.set("repo")
+                        }
+                    }
+                    developers {
+                        developer {
+                            id.set("vpelikh")
+                            name.set("Vasily Pelikh")
+                            url.set("https://github.com/vpelikh")
+                        }
+                    }
+                    scm {
+                        url.set("https://github.com/vpelikh/aot-cache-training")
+                        connection.set("scm:git:https://github.com/vpelikh/aot-cache-training.git")
+                        developerConnection.set("scm:git:ssh://git@github.com/vpelikh/aot-cache-training.git")
+                    }
                 }
             }
         }

@@ -8,6 +8,8 @@ maven = "3.9.16"
 mavenPluginTools = "3.16.0"
 mavenPluginDevelopment = "1.0.3"
 jspecify = "1.0.0"
+vanniktechMavenPublish = "0.37.0"
+pluginPublish = "2.2.1"
 
 [libraries]
 spring-test = { module = "org.springframework:spring-test", version.ref = "spring" }
@@ -27,3 +29,5 @@ jspecify = { module = "org.jspecify:jspecify", version.ref = "jspecify" }
 
 [plugins]
 maven-plugin-development = { id = "org.gradlex.maven-plugin-development", version.ref = "mavenPluginDevelopment" }
+vanniktech-maven-publish = { id = "com.vanniktech.maven.publish", version.ref = "vanniktechMavenPublish" }
+plugin-publish = { id = "com.gradle.plugin-publish", version.ref = "pluginPublish" }

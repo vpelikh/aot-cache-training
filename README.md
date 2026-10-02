@@ -189,6 +189,26 @@ and runs after the training JVM exits (`AotCache.verifyRecordedCache`).
 The Maven integration tests publish all modules to `build/local-repo` and run a real Maven
 build against it.
 
+## Releasing
+
+Publishing is driven by the `release` workflow. Push a tag (for example `v0.1.0`) or run the
+workflow manually with a version, and it will:
+
+1. build and verify the project,
+2. publish every module to Maven Central via the Sonatype Central Portal, and
+3. publish the Gradle plugin to the Gradle Plugin Portal.
+
+The Maven Central deployment is uploaded as `USER_MANAGED`: it is validated automatically but
+still needs a manual "Publish" click on the [Central Portal](https://central.sonatype.com/publishing/deployments).
+
+The workflow reads these repository secrets:
+
+| Secret | Purpose |
+| --- | --- |
+| `CENTRAL_PORTAL_USERNAME` / `CENTRAL_PORTAL_PASSWORD` | Sonatype Central Portal user token. |
+| `SIGNING_KEY` | ASCII-armored GPG private key used to sign the Maven Central artifacts. |
+| `GRADLE_PUBLISH_KEY` / `GRADLE_PUBLISH_SECRET` | Gradle Plugin Portal API key. |
+
 ## License
 
 Apache License, Version 2.0.

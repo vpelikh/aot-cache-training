@@ -59,7 +59,7 @@ public class AotCacheRecordMojo extends AbstractMojo {
 	@Parameter(defaultValue = "${project}", readonly = true, required = true)
 	private MavenProject project;
 
-	@org.apache.maven.plugins.annotations.Component
+	@javax.inject.Inject
 	private org.eclipse.aether.RepositorySystem repositorySystem;
 
 	@Parameter(defaultValue = "${repositorySystemSession}", readonly = true)

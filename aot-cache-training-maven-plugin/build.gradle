@@ -34,6 +34,7 @@ dependencies {
 	compileOnly(libs.maven.core)
 	compileOnly(libs.maven.plugin.annotations)
 	compileOnly(libs.maven.resolver.api)
+	compileOnly("javax.inject:javax.inject:1")
 
 	testImplementation(libs.maven.plugin.api)
 	testImplementation(libs.maven.core)
@@ -47,6 +48,7 @@ dependencies {
 // files, so compile this module to an older release. The runtime behaviour is
 // unaffected: the recording flag is understood by the JDK that runs the tests.
 tasks.withType(JavaCompile).configureEach {
+		options.compilerArgs.add("-Xlint:all,-processing")
 	options.release = 17
 }
 

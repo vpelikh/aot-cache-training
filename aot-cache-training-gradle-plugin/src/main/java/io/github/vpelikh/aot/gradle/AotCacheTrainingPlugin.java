@@ -88,6 +88,24 @@ public class AotCacheTrainingPlugin implements Plugin<Project> {
 		Path buildDirectory = project.getLayout().getBuildDirectory().get().getAsFile().toPath();
 		Path cacheFile = AotCache.defaultCacheFile(buildDirectory);
 
+		// The verify task is always registered so it exists regardless of plugin order.
+		project.getTasks().register(VERIFY_TASK_NAME, (task) -> {
+			task.setGroup(GROUP);
+			task.setDescription("Verifies that the integration tests recorded a non-empty JVM AOT cache");
+			task.doLast((unused) -> {
+				if (!Boolean.TRUE.equals(extension.getEnabled().getOrElse(false))) {
+					return;
+				}
+				long size = AotCache.verifyRecordedCache(cacheFile);
+				if (size <= 0) {
+					throw new IllegalStateException("AOT cache recording was enabled (aotCacheTraining.enabled = "
+							+ "true) but no non-empty cache was found at " + cacheFile + ". Run on JDK "
+							+ AotCache.MINIMUM_RECORDING_JDK
+							+ "+ and make sure the training JVM exits cleanly (no System.exit mid-run).");
+				}
+			});
+		});
+
 		// Source sets and the jar task require the java plugin; react when it is applied so the
 		// plugin can be listed before or after 'java' in the plugins block.
 		project.getPlugins().withId("java", (java) -> configureJavaProject(project, extension, cacheFile));
@@ -109,23 +127,8 @@ public class AotCacheTrainingPlugin implements Plugin<Project> {
 		project.getTasks().named(RECORD_TASK_NAME, JavaExec.class).configure((task) -> task
 			.onlyIf("AOT cache recording is enabled", (unused) -> Boolean.TRUE.equals(extension.getEnabled().getOrElse(false))));
 
-		TaskProvider<?> verify = project.getTasks().register(VERIFY_TASK_NAME, (task) -> {
-			task.setGroup(GROUP);
-			task.setDescription("Verifies that the integration tests recorded a non-empty JVM AOT cache");
-			task.dependsOn(record);
-		});
-		project.getTasks().named(VERIFY_TASK_NAME).configure((task) -> task.doLast((unused) -> {
-			if (!Boolean.TRUE.equals(extension.getEnabled().getOrElse(false))) {
-				return;
-			}
-			long size = AotCache.verifyRecordedCache(cacheFile);
-			if (size <= 0) {
-				throw new IllegalStateException("AOT cache recording was enabled (aotCacheTraining.enabled = true) "
-						+ "but no non-empty cache was found at " + cacheFile + ". Run on JDK "
-						+ AotCache.MINIMUM_RECORDING_JDK
-						+ "+ and make sure the training JVM exits cleanly (no System.exit mid-run).");
-			}
-		}));
+		// Verification requires the recording task.
+		project.getTasks().named(VERIFY_TASK_NAME).configure((task) -> task.dependsOn(record));
 	}
 
 	private void configureTraining(Project project, AotCacheTrainingExtension extension, JavaExec task, Path cacheFile,

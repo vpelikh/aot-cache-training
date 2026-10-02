@@ -22,9 +22,15 @@ description = "JUnit Platform entry point that runs the tests used as an AOT cac
 
 dependencies {
 	api(project(":aot-cache-training"))
-	api("org.junit.platform:junit-platform-launcher:1.14.4")
-	api("org.junit.platform:junit-platform-engine:1.14.4")
-	api("org.junit.platform:junit-platform-commons:1.14.4")
+
+	// The JUnit Platform launcher API is needed to compile the launcher, but it is
+	// deliberately NOT a transitive dependency: the training class path must use the JUnit
+	// Platform generation that the target project already uses, resolved by the build
+	// plugins at run time. Shipping our own generation here would clash with the project's
+	// (for example, a JUnit 6 project versus our JUnit 5 Platform).
+	compileOnly("org.junit.platform:junit-platform-launcher:1.14.4")
+	compileOnly("org.junit.platform:junit-platform-engine:1.14.4")
+	compileOnly("org.junit.platform:junit-platform-commons:1.14.4")
 
 	testImplementation(libs.junit.jupiter)
 	testRuntimeOnly(libs.junit.platform.launcher)

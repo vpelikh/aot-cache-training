@@ -204,6 +204,23 @@ class AotCacheTrainingPluginFunctionalTests {
 		assertThat(this.projectDir.resolve("build/aot-cache/application.aot")).exists();
 	}
 
+	@Test
+	@EnabledIf("io.github.vpelikh.aot.gradle.AotCacheTrainingPluginFunctionalTests#jdkSupportsRecording")
+	void noTestsFailsTheTrainingRunByDefault() throws IOException {
+		// Remove the test so nothing is discovered.
+		java.nio.file.Files.delete(this.projectDir.resolve("src/test/java/sample/SampleTests.java"));
+		write("src/test/java/sample/NotATest.java", """
+				package sample;
+
+				class NotATest {
+				}
+				""");
+
+		BuildResult result = runner("aotCacheTraining").buildAndFail();
+
+		assertThat(result.getOutput()).contains("No tests were discovered");
+	}
+
 	private GradleRunner runner(String... arguments) {
 		java.util.List<String> args = new java.util.ArrayList<>(java.util.Arrays.asList(arguments));
 		args.add("--stacktrace");

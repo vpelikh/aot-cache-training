@@ -101,7 +101,9 @@ public final class TrainingLauncher {
 			}
 		}
 		if (summary.getTestsFoundCount() == 0) {
-			writer.println("[aot-cache-training] No tests were discovered; the cache would be empty.");
+			writer.println("[aot-cache-training] No tests were discovered on the class path, so the recorded cache "
+					+ "would be empty and useless. Check your test sources and any configured packages to scan. "
+					+ "Pass --allow-empty to proceed anyway.");
 			writer.flush();
 			if (!arguments.contains("--allow-empty")) {
 				System.exit(2);

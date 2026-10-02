@@ -22,6 +22,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import io.github.vpelikh.aot.AotCache;
+import io.github.vpelikh.aot.JUnitPlatformVersion;
 import io.github.vpelikh.aot.trainer.TrainingClasspath;
 import org.gradle.api.Plugin;
 import org.gradle.api.Project;
@@ -82,10 +83,17 @@ public class AotCacheTrainingPlugin implements Plugin<Project> {
 			.create("aotCacheTraining", AotCacheTrainingExtension.class);
 		extension.getEnabled().convention(false);
 		extension.getFailOnTestFailure().convention(true);
+		extension.getAllowEmptyWorkload().convention(false);
 
 		Path buildDirectory = project.getLayout().getBuildDirectory().get().getAsFile().toPath();
 		Path cacheFile = AotCache.defaultCacheFile(buildDirectory);
 
+		// Source sets and the jar task require the java plugin; react when it is applied so the
+		// plugin can be listed before or after 'java' in the plugins block.
+		project.getPlugins().withId("java", (java) -> configureJavaProject(project, extension, cacheFile));
+	}
+
+	private void configureJavaProject(Project project, AotCacheTrainingExtension extension, Path cacheFile) {
 		// Package the test classes into a JAR so the training class path has no non-empty
 		// directory, which the JVM requires for AOT cache recording.
 		TaskProvider<Jar> mainJar = project.getTasks().named("jar", Jar.class);
@@ -143,23 +151,24 @@ public class AotCacheTrainingPlugin implements Plugin<Project> {
 				.isMockingLibrary(file.getName()))
 			.toList()));
 		// The launcher and its core helpers live on the plugin's class path, because the
-		// plugin depends on the trainer module. Resolve their jars so the training JVM can
-		// load them; JUnit Platform, Spring Test and their dependencies come from the
-		// project's own test runtime class path.
+		// plugin depends on the trainer module. They carry no JUnit. The JUnit Platform
+		// generation comes from the project; the launcher itself (which junit-jupiter does
+		// not bring) is resolved at the project's own platform version so the launcher API
+		// and the test engine are never mixed across generations.
 		classpath.from(project.getProviders().provider(() -> {
 			List<File> launcher = new ArrayList<>();
-			addCodeSource(launcher, io.github.vpelikh.aot.trainer.TrainingLauncher.class);
 			addCodeSource(launcher, AotCache.class);
-			launcher.addAll(project.getBuildscript()
-				.getConfigurations()
-				.getByName("classpath")
+			boolean projectHasLauncher = test.getRuntimeClasspath()
 				.getFiles()
 				.stream()
-				.filter((file) -> file.getName().startsWith("aot-cache-training")
-						|| file.getName().startsWith("jspecify-"))
-				.toList());
+				.anyMatch((file) -> file.getName().startsWith("junit-platform-launcher-"));
+			if (!projectHasLauncher) {
+				launcher.addAll(resolveLauncher(project, test));
+			}
 			return launcher.stream().distinct().toList();
 		}));
+		classpath.from(project.getProviders().provider(
+				() -> List.of(launcherJar(io.github.vpelikh.aot.trainer.TrainingLauncher.class))));
 		task.setClasspath(classpath);
 		task.getArgumentProviders().add(new AotCacheArgsProvider(extension));
 		task.getJvmArgumentProviders()
@@ -173,15 +182,44 @@ public class AotCacheTrainingPlugin implements Plugin<Project> {
 	 * @param type a class from the component to add
 	 */
 	private static void addCodeSource(List<File> target, Class<?> type) {
+		target.add(launcherJar(type));
+	}
+
+	private static File launcherJar(Class<?> type) {
 		try {
 			java.security.CodeSource codeSource = type.getProtectionDomain().getCodeSource();
-			if (codeSource != null) {
-				target.add(new File(codeSource.getLocation().toURI()));
+			if (codeSource == null) {
+				throw new IllegalStateException("No code source for " + type.getName());
 			}
+			return new File(codeSource.getLocation().toURI());
 		}
 		catch (Exception ex) {
 			throw new IllegalStateException("Unable to locate the code source for " + type.getName(), ex);
 		}
 	}
+
+	/**
+	 * Resolve the JUnit Platform launcher at the project's own JUnit Platform version, so the
+	 * launcher API and the test engine belong to the same generation. Falls back to the
+	 * launcher version this plugin was built against when the project brings none.
+	 * @param project the project
+	 * @param test the test source set
+	 * @return the launcher JAR(s)
+	 */
+	private static List<File> resolveLauncher(Project project, SourceSet test) {
+		List<Path> projectFiles = test.getRuntimeClasspath().getFiles().stream().map(File::toPath).toList();
+		String version = JUnitPlatformVersion.find(projectFiles).orElse(DEFAULT_JUNIT_PLATFORM_VERSION);
+		org.gradle.api.artifacts.Configuration configuration = project.getConfigurations()
+			.detachedConfiguration(project.getDependencies()
+				.create("org.junit.platform:junit-platform-launcher:" + version));
+		configuration.setTransitive(true);
+		return new ArrayList<>(configuration.resolve());
+	}
+
+	/**
+	 * The JUnit Platform version this plugin was compiled against, used only when the project
+	 * provides no JUnit Platform of its own.
+	 */
+	private static final String DEFAULT_JUNIT_PLATFORM_VERSION = "1.14.4";
 
 }

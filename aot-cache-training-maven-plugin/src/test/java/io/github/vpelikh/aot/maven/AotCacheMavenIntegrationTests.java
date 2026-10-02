@@ -83,6 +83,23 @@ class AotCacheMavenIntegrationTests {
 		assertThat(this.projectDir.resolve("target/aot-cache/application.aot")).exists();
 	}
 
+	@Test
+	void recordGoalFailsWhenNoTestsAreDiscovered() throws Exception {
+		writePom();
+		// No test sources at all.
+		write("src/main/java/sample/App.java", """
+				package sample;
+
+				class App {
+				}
+				""");
+
+		MavenResult result = runMaven("verify", "-Daot.cache.record=true");
+
+		assertThat(result.exitCode()).as("maven output:%n%s", result.output()).isNotZero();
+		assertThat(result.output()).contains("No tests were discovered");
+	}
+
 	private void writePom() throws IOException {
 		write("pom.xml", """
 				<project xmlns="http://maven.apache.org/POM/4.0.0">
@@ -114,18 +131,6 @@ class AotCacheMavenIntegrationTests {
 										</goals>
 									</execution>
 								</executions>
-								<dependencies>
-									<dependency>
-										<groupId>io.github.vpelikh</groupId>
-										<artifactId>aot-cache-training</artifactId>
-										<version>%s</version>
-									</dependency>
-									<dependency>
-										<groupId>io.github.vpelikh</groupId>
-										<artifactId>aot-cache-training-trainer</artifactId>
-										<version>%s</version>
-									</dependency>
-								</dependencies>
 							</plugin>
 						</plugins>
 					</build>
@@ -138,7 +143,7 @@ class AotCacheMavenIntegrationTests {
 						</dependency>
 					</dependencies>
 				</project>
-				""".formatted(VERSION, VERSION, VERSION));
+				""".formatted(VERSION));
 	}
 
 	private MavenResult runMaven(String... goals) throws IOException, InterruptedException {

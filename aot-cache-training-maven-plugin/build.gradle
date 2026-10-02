@@ -33,6 +33,7 @@ dependencies {
 	compileOnly(libs.maven.plugin.api)
 	compileOnly(libs.maven.core)
 	compileOnly(libs.maven.plugin.annotations)
+	compileOnly(libs.maven.resolver.api)
 
 	testImplementation(libs.maven.plugin.api)
 	testImplementation(libs.maven.core)

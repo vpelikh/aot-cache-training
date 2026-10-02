@@ -20,6 +20,7 @@ mockito-core = { module = "org.mockito:mockito-core", version.ref = "mockito" }
 maven-plugin-api = { module = "org.apache.maven:maven-plugin-api", version.ref = "maven" }
 maven-core = { module = "org.apache.maven:maven-core", version.ref = "maven" }
 maven-plugin-annotations = { module = "org.apache.maven.plugin-tools:maven-plugin-annotations", version.ref = "mavenPluginTools" }
+maven-resolver-api = { module = "org.apache.maven.resolver:maven-resolver-api", version = "1.9.22" }
 jspecify = { module = "org.jspecify:jspecify", version.ref = "jspecify" }
 
 [plugins]

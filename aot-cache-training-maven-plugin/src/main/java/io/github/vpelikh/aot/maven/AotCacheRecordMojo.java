@@ -23,6 +23,7 @@ import java.util.ArrayList;
 import java.util.List;
 
 import io.github.vpelikh.aot.AotCache;
+import io.github.vpelikh.aot.JUnitPlatformVersion;
 import io.github.vpelikh.aot.trainer.TrainingClasspath;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
@@ -53,8 +54,19 @@ import org.apache.maven.project.MavenProject;
 		requiresDependencyResolution = org.apache.maven.plugins.annotations.ResolutionScope.TEST, threadSafe = true)
 public class AotCacheRecordMojo extends AbstractMojo {
 
+	private static final String DEFAULT_JUNIT_PLATFORM_VERSION = "1.14.4";
+
 	@Parameter(defaultValue = "${project}", readonly = true, required = true)
 	private MavenProject project;
+
+	@org.apache.maven.plugins.annotations.Component
+	private org.eclipse.aether.RepositorySystem repositorySystem;
+
+	@Parameter(defaultValue = "${repositorySystemSession}", readonly = true)
+	private org.eclipse.aether.RepositorySystemSession repositorySystemSession;
+
+	@Parameter(defaultValue = "${project.remoteProjectRepositories}", readonly = true)
+	private java.util.List<org.eclipse.aether.repository.RemoteRepository> remoteRepositories;
 
 	/**
 	 * Whether to record an AOT cache. Can also be set with {@code -Daot.cache.record=true}.
@@ -86,6 +98,13 @@ public class AotCacheRecordMojo extends AbstractMojo {
 	 */
 	@Parameter(defaultValue = "true")
 	private boolean failOnTestFailure = true;
+
+	/**
+	 * Whether to record a cache even when the training run discovers no tests. Defaults to
+	 * {@code false}, because an empty workload records a large but useless cache.
+	 */
+	@Parameter(defaultValue = "false")
+	private boolean allowEmptyWorkload = false;
 
 	@Override
 	public void execute() throws MojoExecutionException {
@@ -130,7 +149,9 @@ public class AotCacheRecordMojo extends AbstractMojo {
 		if (!this.failOnTestFailure) {
 			command.add("--no-fail-on-test-failure");
 		}
-		command.add("--allow-empty");
+		if (this.allowEmptyWorkload) {
+			command.add("--allow-empty");
+		}
 		return command;
 	}
 
@@ -149,31 +170,71 @@ public class AotCacheRecordMojo extends AbstractMojo {
 		catch (org.apache.maven.artifact.DependencyResolutionRequiredException ex) {
 			throw new IOException("Unable to resolve the test class path", ex);
 		}
-		// The launcher, its core helpers and the JUnit Platform live in the plugin realm.
+		// The launcher and its core helpers come from the plugin's own class path; they carry
+		// no JUnit. The JUnit Platform generation comes from the project, so a project on a
+		// newer generation (for example JUnit 6) is never mixed with ours.
 		elements.addAll(pluginClasspath());
+		// junit-jupiter does not bring the launcher, so add it unless the project already
+		// provides one, always at the project's own JUnit Platform version.
+		if (!hasJar(elements, "junit-platform-launcher-")) {
+			elements.add(resolveLauncher());
+		}
 		// Mocking libraries self-attach agents that break cache assembly.
 		elements = new ArrayList<>(TrainingClasspath.withoutMockingLibraries(elements));
 		return TrainingClasspath.jarOnlyClasspath(elements, workDirectory);
 	}
 
 	/**
-	 * Collect the launcher, its core helpers and the JUnit Platform launcher API from the
-	 * plugin's own class path, so the training JVM can load the launcher. The test engine
-	 * and JUnit's own commons come from the project's test class path, so no engine is
-	 * duplicated.
+	 * Collect the launcher and its core helpers from the plugin's own class path. These
+	 * deliberately do not include JUnit; the JUnit Platform comes from the project.
+	 * @return the plugin class path entries to append
 	 */
 	private List<Path> pluginClasspath() {
 		List<Path> elements = new ArrayList<>();
 		addCodeSource(elements, io.github.vpelikh.aot.trainer.TrainingLauncher.class);
 		addCodeSource(elements, AotCache.class);
-		// The JUnit Platform launcher API and its commons/engine helpers are not transitive
-		// from junit-jupiter, so they come from the plugin realm. The Jupiter engine itself
-		// comes from the project's test class path; the versions align because the plugin
-		// depends on the same JUnit Platform generation.
-		addCodeSource(elements, org.junit.platform.launcher.core.LauncherFactory.class);
-		addCodeSource(elements, org.junit.platform.engine.ConfigurationParameters.class);
-		addCodeSource(elements, org.junit.platform.commons.PreconditionViolationException.class);
 		return elements;
+	}
+
+	/**
+	 * Resolve the JUnit Platform launcher at the project's own JUnit Platform version, so the
+	 * launcher API and the test engine belong to the same generation. Falls back to the
+	 * launcher version this plugin was built against when the project brings no JUnit Platform.
+	 */
+	private Path resolveLauncher() throws IOException {
+		String version = JUnitPlatformVersion.find(projectClasspathElements()).orElse(DEFAULT_JUNIT_PLATFORM_VERSION);
+		try {
+			org.eclipse.aether.artifact.Artifact artifact = new org.eclipse.aether.artifact.DefaultArtifact(
+					"org.junit.platform", "junit-platform-launcher", "jar", version);
+			org.eclipse.aether.resolution.ArtifactRequest request = new org.eclipse.aether.resolution.ArtifactRequest(
+					artifact, this.remoteRepositories, null);
+			org.eclipse.aether.resolution.ArtifactResult result = this.repositorySystem
+				.resolveArtifact(this.repositorySystemSession, request);
+			return result.getArtifact().getFile().toPath();
+		}
+		catch (org.eclipse.aether.resolution.ArtifactResolutionException ex) {
+			throw new IOException("Unable to resolve org.junit.platform:junit-platform-launcher:" + version
+					+ ". The AOT cache training run needs the JUnit Platform launcher on the training class path.", ex);
+		}
+	}
+
+	private List<Path> projectClasspathElements() {
+		List<Path> elements = new ArrayList<>();
+		try {
+			for (String element : this.project.getTestClasspathElements()) {
+				elements.add(Path.of(element));
+			}
+		}
+		catch (org.apache.maven.artifact.DependencyResolutionRequiredException ex) {
+			// Fall through: treat as an empty class path, so the default launcher version is used.
+		}
+		return elements;
+	}
+
+	private boolean hasJar(List<Path> elements, String namePrefix) {
+		return elements.stream()
+			.map((element) -> element.getFileName().toString())
+			.anyMatch((name) -> name.startsWith(namePrefix));
 	}
 
 	private void addCodeSource(List<Path> target, Class<?> type) {
@@ -235,6 +296,10 @@ public class AotCacheRecordMojo extends AbstractMojo {
 
 	void setFailOnTestFailure(boolean failOnTestFailure) {
 		this.failOnTestFailure = failOnTestFailure;
+	}
+
+	void setAllowEmptyWorkload(boolean allowEmptyWorkload) {
+		this.allowEmptyWorkload = allowEmptyWorkload;
 	}
 
 }

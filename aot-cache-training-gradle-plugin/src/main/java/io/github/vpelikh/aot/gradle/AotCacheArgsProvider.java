@@ -44,9 +44,11 @@ class AotCacheArgsProvider implements CommandLineArgumentProvider {
 		if (!Boolean.TRUE.equals(this.extension.getFailOnTestFailure().getOrElse(true))) {
 			args.add("--no-fail-on-test-failure");
 		}
-		// The verify task, not the training run, owns the fail-closed behaviour when a project
-		// has no tests to contribute to the training workload.
-		args.add("--allow-empty");
+		// A training run that discovers no tests would record a large but useless cache, so
+		// it fails by default with an actionable message.
+		if (Boolean.TRUE.equals(this.extension.getAllowEmptyWorkload().getOrElse(false))) {
+			args.add("--allow-empty");
+		}
 		return args;
 	}
 

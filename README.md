@@ -99,18 +99,6 @@ This records `build/aot-cache/application.aot`.
             <goals><goal>verify</goal></goals>
         </execution>
     </executions>
-    <dependencies>
-        <dependency>
-            <groupId>io.github.vpelikh</groupId>
-            <artifactId>aot-cache-training</artifactId>
-            <version>0.1.0</version>
-        </dependency>
-        <dependency>
-            <groupId>io.github.vpelikh</groupId>
-            <artifactId>aot-cache-training-trainer</artifactId>
-            <version>0.1.0</version>
-        </dependency>
-    </dependencies>
 </plugin>
 ```
 
@@ -119,6 +107,11 @@ mvn verify -Daot.cache.record=true
 ```
 
 This records `target/aot-cache/application.aot`.
+
+No plugin-level dependencies are needed, and the plugin never modifies your test class
+path. It derives your JUnit Platform version from the project and resolves a matching
+launcher for its own isolated training JVM, so a JUnit 5 and a JUnit 6 project both work
+without any extra configuration.
 
 ### Using the cache in a container image
 
@@ -137,7 +130,14 @@ with `-XX:AOTCache=<path>`.
 3. **Assemble the cache.** The JVM assembles the final cache on clean exit, *after*
    shutdown hooks run.
 4. **Verify.** The `verify` goal / task fails the build when recording was requested but no
-   non-empty cache was produced.
+   non-empty cache was produced. A training run that discovers no tests also fails by
+   default, because an empty workload records a large but useless cache.
+
+### JUnit Platform version alignment
+
+The plugin resolves the launcher at your project's own JUnit Platform version and isolates
+it to the training JVM. It never adds JUnit (or anything else) to your test class path, so
+your dependency tree and your normal `test` task are untouched.
 
 ### Verification and shutdown hooks
 

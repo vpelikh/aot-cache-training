@@ -52,4 +52,12 @@ public abstract class AotCacheTrainingExtension {
 	 */
 	public abstract Property<Boolean> getFailOnTestFailure();
 
+	/**
+	 * Whether to record a cache even when the training run discovers no tests. Defaults to
+	 * {@code false}, because an empty workload records a large but useless cache and is
+	 * almost always a misconfiguration.
+	 * @return the allow-empty-workload property
+	 */
+	public abstract Property<Boolean> getAllowEmptyWorkload();
+
 }

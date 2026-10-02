@@ -42,6 +42,11 @@ public final class TrainingClasspath {
 
 	/**
 	 * Package the contents of a directory into a JAR file.
+	 *
+	 * <p>Directory entries are written explicitly (not just file entries): Spring's
+	 * {@code classpath*:} resource scanning relies on them to enumerate packages inside a
+	 * JAR, so omitting them would break {@code @SpringBootTest} configuration detection and
+	 * similar classpath scanning.
 	 * @param sourceDirectory the directory to package (may not exist)
 	 * @param jarFile the JAR file to create
 	 * @throws IOException if packaging fails
@@ -50,16 +55,31 @@ public final class TrainingClasspath {
 		Files.createDirectories(jarFile.getParent());
 		try (JarOutputStream jar = new JarOutputStream(Files.newOutputStream(jarFile))) {
 			if (Files.isDirectory(sourceDirectory)) {
+				java.util.Set<String> directories = new java.util.LinkedHashSet<>();
 				try (var stream = Files.walk(sourceDirectory)) {
 					List<Path> files = stream.filter(Files::isRegularFile).sorted().toList();
 					for (Path file : files) {
 						String entryName = sourceDirectory.relativize(file).toString().replace('\\', '/');
+						writeParentDirectories(jar, entryName, directories);
 						jar.putNextEntry(new JarEntry(entryName));
 						Files.copy(file, jar);
 						jar.closeEntry();
 					}
 				}
 			}
+		}
+	}
+
+	private static void writeParentDirectories(JarOutputStream jar, String entryName, java.util.Set<String> written)
+			throws IOException {
+		int slash = entryName.indexOf('/');
+		while (slash >= 0) {
+			String directory = entryName.substring(0, slash + 1);
+			if (written.add(directory)) {
+				jar.putNextEntry(new JarEntry(directory));
+				jar.closeEntry();
+			}
+			slash = entryName.indexOf('/', slash + 1);
 		}
 	}
 

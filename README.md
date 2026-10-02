@@ -132,18 +132,65 @@ without any extra configuration.
 
 ### Using the cache in a container image
 
-Place the recorded file at `aot-cache/application.aot` in your application content. The
-Paketo Spring Boot buildpack detects it, skips the training run, and loads it at startup
+An AOT cache only loads against the **exact** JVM build, architecture and class path it was
+recorded with. The packaged application's class path (`runner.jar` plus `lib/`) is shorter
+than a test class path, and the build host's JVM usually differs from the image JRE, so a
+cache recorded by the in-process test run can **never** be loaded by the image. To produce a
+cache the image can load, enable out-of-process training: the packaged application runs in
+its own JVM and the integration tests drive it over HTTP, exactly as Quarkus does with
+`@QuarkusIntegrationTest`.
+
+```kotlin
+aotCacheTraining {
+    enabled = true
+    outOfProcess = true
+    // Record inside the image so the cache matches that image's JVM build and architecture.
+    // Without this, the local JVM records the cache (usable when it matches the runtime JVM).
+    containerImage = "my-app:latest"
+}
+```
+
+```bash
+./gradlew aotCacheTraining bootBuildImage
+```
+
+The training launcher extracts the boot jar to `runner.jar` plus `lib/`, starts it with
+`-XX:AOTCacheOutput=...` (optionally inside `containerImage`), waits for `readyUrl`, then
+runs the tests as an external client. The tests read the running application's base URL from
+the `aot.training.url` system property and call it over HTTP:
+
+```java
+class GreetingHttpTests {
+
+    @Test
+    void greets() throws Exception {
+        String baseUrl = System.getProperty("aot.training.url");
+        // ... call the application over HTTP with java.net.http.HttpClient ...
+    }
+
+}
+```
+
+`verifyAotCache` then fails the build if no non-empty cache was produced. Ship the cache to
+the buildpack by placing it at `aot-cache/application.aot` in the application content (for
+example with `BP_INCLUDE_FILES='aot-cache/application.aot'`, or inside the packaged jar). The
+Paketo Spring Boot buildpack detects it, skips its own training run, and loads it at startup
 with `-XX:AOTCache=<path>`.
+
+> In-process tests (`@SpringBootTest`) cannot drive an out-of-process application; the
+> out-of-process workload must be black-box tests that call the application over HTTP.
 
 ## How it works
 
 1. **Package classes into JARs.** The build plugins jar `target/test-classes` /
    `build/classes` so the class path has no non-empty directory.
-2. **Run the training workload.** `TrainingLauncher` runs the configured tests through the
-   JUnit Platform in a JVM started with `-XX:AOTCacheOutput=<build>/aot-cache/application.aot`.
-   `AotCacheTestExecutionListener` eagerly initializes each `ApplicationContext` so context
-   creation and bean initialization are captured.
+2. **Run the training workload.** In the default (in-process) mode, `TrainingLauncher` runs
+   the configured tests through the JUnit Platform in a JVM started with
+   `-XX:AOTCacheOutput=<build>/aot-cache/application.aot`. `AotCacheTestExecutionListener`
+   eagerly initializes each `ApplicationContext` so context creation and bean initialization
+   are captured. In out-of-process mode, `OutOfProcessTrainingLauncher` starts the packaged
+   application (optionally in `containerImage`) with the same flag and runs the tests against
+   it over HTTP.
 3. **Assemble the cache.** The JVM assembles the final cache on clean exit, *after*
    shutdown hooks run.
 4. **Verify.** The `verify` goal / task fails the build when recording was requested but no

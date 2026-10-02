@@ -66,4 +66,62 @@ public abstract class AotCacheTrainingExtension {
      */
     public abstract Property<Boolean> getAllowEmptyWorkload();
 
+    /**
+     * Whether to record the cache for the packaged application by running it in its own JVM
+     * and driving it from the integration tests over HTTP (out of process).
+     *
+     * <p>This is required to produce a cache the container image can load: an AOT cache only
+     * loads against the exact class path it was recorded with, and the packaged application's
+     * class path differs from a test class path. The tests must therefore be black-box tests
+     * that call the application over HTTP (the base URL is exposed to them through the
+     * {@code aot.training.url} system property). Defaults to {@code false}, which uses the
+     * in-process mode (the tests run in the JVM that records the cache).
+     * @return the out-of-process property
+     */
+    public abstract Property<Boolean> getOutOfProcess();
+
+    /**
+     * A URL polled until it returns a 2xx/3xx response, used as the readiness check and the
+     * base URL for out-of-process training. Defaults to {@code http://localhost:8080/}.
+     * @return the readiness URL property
+     */
+    public abstract Property<String> getReadyUrl();
+
+    /**
+     * The application start class used for out-of-process training. When unset, it is read
+     * from the packaged JAR's {@code Start-Class} manifest attribute.
+     * @return the start-class property
+     */
+    public abstract Property<String> getStartClass();
+
+    /**
+     * A container image whose JVM records the out-of-process cache. When set, the packaged
+     * application runs inside that image, so the recorded cache matches the image's JVM build
+     * and architecture and can be loaded by that image at runtime. When unset, the local JVM
+     * records the cache (usable when it matches the runtime JVM).
+     * @return the container-image property
+     */
+    public abstract Property<String> getContainerImage();
+
+    /**
+     * The container runtime executable used when {@link #getContainerImage()} is set.
+     * Defaults to {@code docker}.
+     * @return the container-runtime property
+     */
+    public abstract Property<String> getContainerRuntime();
+
+    /**
+     * Arguments passed to the application during out-of-process training (for example, to set
+     * a Spring profile).
+     * @return the application-arguments property
+     */
+    public abstract ListProperty<String> getApplicationArguments();
+
+    /**
+     * How long to wait for the application to become ready during out-of-process training, in
+     * seconds. Defaults to {@code 120}.
+     * @return the start-timeout property
+     */
+    public abstract Property<Integer> getStartTimeout();
+
 }

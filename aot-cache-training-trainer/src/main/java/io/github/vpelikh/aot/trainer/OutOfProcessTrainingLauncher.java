@@ -85,6 +85,14 @@ public final class OutOfProcessTrainingLauncher {
      */
     public static void main(String[] args) throws IOException {
         Options options = Options.parse(List.of(args));
+        if (options.startClass == null) {
+            options.startClass = resolveStartClass(options.appJar);
+        }
+        // Bind to a free port so a busy port (for example a leftover application on 8080)
+        // cannot make the readiness check pass against the wrong server.
+        int port = findFreePort();
+        options.applicationArguments.add("--server.port=" + port);
+        options.readyUrl = withPort(options.readyUrl, port);
         System.out.println("[aot-cache-training] Starting " + options.appJar + " to record an AOT cache to "
                 + options.cacheFile);
         AppProcess process = new AppProcess(options.appJar, options.layoutDirectory, options.cacheFile,
@@ -116,6 +124,29 @@ public final class OutOfProcessTrainingLauncher {
         return readyUrl.getScheme() + "://" + authority;
     }
 
+    private static int findFreePort() throws IOException {
+        try (java.net.ServerSocket socket = new java.net.ServerSocket(0)) {
+            return socket.getLocalPort();
+        }
+    }
+
+    private static URI withPort(URI readyUrl, int port) {
+        return URI.create(readyUrl.getScheme() + "://" + readyUrl.getHost() + ":" + port
+                + ((readyUrl.getRawPath() != null) ? readyUrl.getRawPath() : ""));
+    }
+
+    private static String resolveStartClass(Path appJar) throws IOException {
+        try (java.util.jar.JarFile jar = new java.util.jar.JarFile(appJar.toFile())) {
+            java.util.jar.Manifest manifest = jar.getManifest();
+            String startClass = (manifest != null) ? manifest.getMainAttributes().getValue("Start-Class") : null;
+            if (startClass == null || startClass.isBlank()) {
+                throw new IOException("The application JAR " + appJar
+                        + " has no Start-Class manifest attribute; pass --start-class explicitly.");
+            }
+            return startClass;
+        }
+    }
+
     private static final class Options {
 
         private final List<String> testArguments = new ArrayList<>();
@@ -144,31 +175,52 @@ public final class OutOfProcessTrainingLauncher {
             Options options = new Options();
             for (int i = 0; i < args.size(); i++) {
                 String argument = args.get(i);
-                switch (argument) {
-                    case "--app-jar" -> options.appJar = Path.of(args.get(++i));
-                    case "--cache" -> options.cacheFile = Path.of(args.get(++i));
-                    case "--layout" -> options.layoutDirectory = Path.of(args.get(++i));
-                    case "--ready-url" -> options.readyUrl = URI.create(args.get(++i));
-                    case "--start-class" -> options.startClass = args.get(++i);
-                    case "--java" -> options.javaExecutable = args.get(++i);
-                    case "--image" -> options.containerImage = args.get(++i);
-                    case "--container-runtime" -> options.containerRuntime = args.get(++i);
-                    case "--application-arg" -> options.applicationArguments.add(args.get(++i));
-                    case "--start-timeout" -> options.startTimeout = java.time.Duration.ofSeconds(Long.parseLong(args.get(++i)));
-                    // Test-selection arguments are forwarded to the test run.
-                    case "--select-package", "--select-class", "--no-fail-on-test-failure", "--allow-empty" -> options.testArguments.add(argument);
-                    default -> {
-                        if (argument.startsWith("--select-package=") || argument.startsWith("--select-class=")) {
-                            options.testArguments.add(argument);
-                        }
+                if (argument.startsWith("--app-jar=")) {
+                    options.appJar = Path.of(argument.substring("--app-jar=".length()));
+                }
+                else if (argument.startsWith("--cache=")) {
+                    options.cacheFile = Path.of(argument.substring("--cache=".length()));
+                }
+                else if (argument.startsWith("--layout=")) {
+                    options.layoutDirectory = Path.of(argument.substring("--layout=".length()));
+                }
+                else if (argument.startsWith("--ready-url=")) {
+                    options.readyUrl = URI.create(argument.substring("--ready-url=".length()));
+                }
+                else if (argument.startsWith("--start-class=")) {
+                    options.startClass = argument.substring("--start-class=".length());
+                }
+                else if (argument.startsWith("--java=")) {
+                    options.javaExecutable = argument.substring("--java=".length());
+                }
+                else if (argument.startsWith("--image=")) {
+                    options.containerImage = argument.substring("--image=".length());
+                }
+                else if (argument.startsWith("--container-runtime=")) {
+                    options.containerRuntime = argument.substring("--container-runtime=".length());
+                }
+                else if (argument.startsWith("--application-arg=")) {
+                    options.applicationArguments.add(argument.substring("--application-arg=".length()));
+                }
+                else if (argument.startsWith("--start-timeout=")) {
+                    options.startTimeout = java.time.Duration
+                        .ofSeconds(Long.parseLong(argument.substring("--start-timeout=".length())));
+                }
+                else if (argument.startsWith("--select-package=") || argument.startsWith("--select-class=")
+                        || "--no-fail-on-test-failure".equals(argument) || "--allow-empty".equals(argument)) {
+                    options.testArguments.add(argument);
+                }
+                else if ("--select-package".equals(argument) || "--select-class".equals(argument)) {
+                    options.testArguments.add(argument);
+                    if (i + 1 < args.size()) {
+                        options.testArguments.add(args.get(++i));
                     }
                 }
             }
-            if (options.appJar == null || options.cacheFile == null || options.readyUrl == null
-                    || options.startClass == null) {
+            if (options.appJar == null || options.cacheFile == null || options.readyUrl == null) {
                 throw new IllegalArgumentException(
                         "Usage: OutOfProcessTrainingLauncher --app-jar <jar> --cache <file> --ready-url <url> "
-                                + "--start-class <class> [--layout <dir>] [--java <path>] [--image <image>] "
+                                + "[--start-class <class>] [--layout <dir>] [--java <path>] [--image <image>] "
                                 + "[--container-runtime <name>] [--application-arg <value>] [--start-timeout <seconds>]");
             }
             if (options.layoutDirectory == null) {

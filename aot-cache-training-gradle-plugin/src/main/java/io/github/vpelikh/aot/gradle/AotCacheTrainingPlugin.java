@@ -93,6 +93,11 @@ public class AotCacheTrainingPlugin implements Plugin<Project> {
         extension.getEnabled().convention(false);
         extension.getFailOnTestFailure().convention(true);
         extension.getAllowEmptyWorkload().convention(false);
+        extension.getOutOfProcess().convention(false);
+        extension.getReadyUrl().convention("http://localhost:8080/");
+        extension.getContainerRuntime().convention("docker");
+        extension.getApplicationArguments().convention(List.of());
+        extension.getStartTimeout().convention(120);
 
         Path buildDirectory = project.getLayout().getBuildDirectory().get().getAsFile().toPath();
         Path cacheFile = AotCache.defaultCacheFile(buildDirectory);
@@ -173,13 +178,16 @@ public class AotCacheTrainingPlugin implements Plugin<Project> {
         });
 
         task.dependsOn(mainJar, testJar);
-        task.getMainClass().set("io.github.vpelikh.aot.trainer.TrainingLauncher");
-        org.gradle.api.file.ConfigurableFileCollection classpath = project.getObjects()
-            .fileCollection();
-        classpath.from(mainJar, testJar);
         SourceSet test = project.getExtensions()
             .getByType(SourceSetContainer.class)
             .getByName(SourceSet.TEST_SOURCE_SET_NAME);
+        boolean outOfProcess = Boolean.TRUE.equals(extension.getOutOfProcess().getOrElse(false));
+        task.getMainClass().set(outOfProcess
+                ? "io.github.vpelikh.aot.trainer.OutOfProcessTrainingLauncher"
+                : "io.github.vpelikh.aot.trainer.TrainingLauncher");
+        org.gradle.api.file.ConfigurableFileCollection classpath = project.getObjects()
+            .fileCollection();
+        classpath.from(mainJar, testJar);
         // Only JAR entries are added: the JVM refuses to record a cache when the class path
         // contains a non-empty directory (build/classes, build/test-classes etc.).
         classpath.from(project.getProviders().provider(() -> test.getRuntimeClasspath()
@@ -210,8 +218,26 @@ public class AotCacheTrainingPlugin implements Plugin<Project> {
             .provider(() -> List.of(launcherJar(io.github.vpelikh.aot.trainer.TrainingLauncher.class))));
         task.setClasspath(classpath);
         task.getArgumentProviders().add(new AotCacheArgsProvider(extension));
-        task.getJvmArgumentProviders()
-            .add(new AotCacheArgumentProvider(extension.getEnabled(), project.getProviders().provider(() -> cacheFile)));
+        if (outOfProcess) {
+            // The application process records the cache, so the test JVM must NOT record:
+            // two JVMs writing the same cache file would clobber each other, and the test
+            // class path is not the class path the cache must match anyway.
+            org.gradle.api.tasks.TaskProvider<org.gradle.jvm.tasks.Jar> bootJar = project.getTasks()
+                .named("bootJar", org.gradle.jvm.tasks.Jar.class);
+            task.dependsOn(bootJar);
+            org.gradle.api.provider.Provider<Path> appJar = bootJar.flatMap(
+                    (jar) -> jar.getArchiveFile().map((file) -> file.getAsFile().toPath()));
+            org.gradle.api.provider.Provider<Path> layout = project.getProviders()
+                .provider(() -> cacheFile.getParent().resolve("app-layout"));
+            task.getArgumentProviders()
+                .add(new OutOfProcessArgsProvider(extension, appJar, project.getProviders().provider(() -> cacheFile),
+                        layout));
+        }
+        else {
+            task.getJvmArgumentProviders()
+                .add(new AotCacheArgumentProvider(extension.getEnabled(),
+                        project.getProviders().provider(() -> cacheFile)));
+        }
         task.getOutputs().file(cacheFile.toFile());
     }
 

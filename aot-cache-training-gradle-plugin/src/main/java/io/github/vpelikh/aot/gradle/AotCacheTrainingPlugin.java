@@ -34,6 +34,7 @@ import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.ModuleVersionIdentifier;
 import org.gradle.api.artifacts.ResolvedArtifact;
 import org.gradle.api.file.ConfigurableFileCollection;
+import org.gradle.api.file.RegularFile;
 import org.gradle.api.file.RegularFileProperty;
 import org.gradle.api.plugins.JavaPluginExtension;
 import org.gradle.api.provider.MapProperty;
@@ -188,22 +189,16 @@ public class AotCacheTrainingPlugin implements Plugin<Project> {
                     // aotCacheTraining.enabled after this configuration callback runs. When
                     // recording is disabled the embed task is skipped, so bootBuildImage must
                     // keep using its normal boot JAR instead of the never-produced output.
-                    Provider<File> imageArchive = project.getProviders().provider(() -> {
-                        if (Boolean.TRUE.equals(extension.getEnabled().getOrElse(false))) {
-                            return embed.get().getOutputJar().getAsFile().get();
-                        }
-                        return project.getTasks().named("bootJar", Jar.class)
-                            .flatMap(Jar::getArchiveFile)
-                            .get()
-                            .getAsFile();
-                    });
-                    archiveFile.set(project.getLayout().file(imageArchive));
+                    Provider<Boolean> enabled = extension.getEnabled().map(Boolean.TRUE::equals).orElse(false);
+                    Provider<RegularFile> embeddedJar = embed.flatMap(EmbedAotCacheTask::getOutputJar);
+                    Provider<RegularFile> bootJar = project.getTasks().named("bootJar", Jar.class)
+                        .flatMap(Jar::getArchiveFile);
+                    archiveFile.set(enabled.flatMap((active) -> active ? embeddedJar : bootJar));
                     @SuppressWarnings("unchecked")
                     MapProperty<String, String> environment = (MapProperty<String, String>) buildImageType
                         .getMethod("getEnvironment")
                         .invoke(buildImage);
-                    environment.put("BP_JVM_AOTCACHE_ENABLED", project.getProviders()
-                        .provider(() -> Boolean.toString(Boolean.TRUE.equals(extension.getEnabled().getOrElse(false)))));
+                    environment.put("BP_JVM_AOTCACHE_ENABLED", enabled.map(String::valueOf));
                 }
                 catch (ReflectiveOperationException ex) {
                     throw new IllegalStateException("Unable to configure bootBuildImage for the AOT cache", ex);

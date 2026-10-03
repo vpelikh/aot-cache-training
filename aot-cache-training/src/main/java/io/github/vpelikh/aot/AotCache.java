@@ -25,7 +25,10 @@ import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.StandardCopyOption;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.List;
+import java.util.Set;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 import java.util.zip.ZipOutputStream;
@@ -155,6 +158,10 @@ public final class AotCache {
         Path staging = Files.createTempFile((parent != null) ? parent : Path.of("."),
                 outputJar.getFileName().toString(), ".tmp");
         try {
+            // createTempFile restricts the temp file (0600 on POSIX); the JAR must stay as
+            // readable as the file it replaces, so carry the target's mode over (or the usual
+            // default when there is no existing target).
+            preservePermissions(outputJar, staging);
             try (ZipFile zip = new ZipFile(bootJar.toFile());
                     ZipOutputStream out = new ZipOutputStream(
                             Files.newOutputStream(staging))) {
@@ -194,6 +201,26 @@ public final class AotCache {
     private static final int UNIX_FILE_MODE = 0100644;
 
     private static final int UNIX_DIR_MODE = 0040755;
+
+    /**
+     * Give the staging file the permissions the final JAR should have: those of the file it
+     * replaces, or the process default when there is no existing target. No-op on file systems
+     * that do not support POSIX permissions.
+     */
+    private static void preservePermissions(Path target, Path staging) {
+        try {
+            if (Files.exists(target)) {
+                Files.setPosixFilePermissions(staging, Files.getPosixFilePermissions(target));
+                return;
+            }
+            Set<PosixFilePermission> defaultPermissions = PosixFilePermissions
+                .fromString("rw-r--r--");
+            Files.setPosixFilePermissions(staging, defaultPermissions);
+        }
+        catch (UnsupportedOperationException | IOException ex) {
+            // Non-POSIX file system: the platform default applies and is fine.
+        }
+    }
 
     /** "version made by": Unix creator OS (3) and ZIP spec 3.0 (30). */
     private static final int VERSION_MADE_BY_UNIX = (3 << 8) | 30;

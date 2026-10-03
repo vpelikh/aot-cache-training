@@ -21,7 +21,10 @@ import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.attribute.PosixFilePermission;
+import java.nio.file.attribute.PosixFilePermissions;
 import java.util.List;
+import java.util.Set;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 import java.util.zip.ZipEntry;
@@ -174,6 +177,26 @@ class AotCacheTests {
             assertThat(entry).isNotNull();
             assertThat(new String(zip.getInputStream(entry).readAllBytes())).isEqualTo("cache-bytes");
         }
+    }
+
+    @Test
+    void embedCacheIntoJarPreservesTheOutputJarPermissions(@TempDir Path tempDir) throws Exception {
+        Set<PosixFilePermission> expected = PosixFilePermissions.fromString("rw-r--r--");
+        Path bootJar = tempDir.resolve("app.jar");
+        try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(bootJar))) {
+            out.putNextEntry(new JarEntry("BOOT-INF/classes/app.txt"));
+            out.write("hello".getBytes(StandardCharsets.UTF_8));
+            out.closeEntry();
+        }
+        Files.setPosixFilePermissions(bootJar, expected);
+        Path cache = tempDir.resolve("application.aot");
+        Files.writeString(cache, "cache-bytes");
+
+        // In place: the staged replacement must not silently downgrade the JAR to temp-file
+        // permissions (0600).
+        AotCache.embedCacheIntoJar(bootJar, cache, bootJar);
+
+        assertThat(Files.getPosixFilePermissions(bootJar)).isEqualTo(expected);
     }
 
     private static String unixMode(Path jar, String name) throws Exception {

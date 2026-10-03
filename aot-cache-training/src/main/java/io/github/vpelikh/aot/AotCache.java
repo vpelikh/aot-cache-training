@@ -18,7 +18,6 @@ package io.github.vpelikh.aot;
 
 import java.io.IOException;
 import java.io.InputStream;
-import java.lang.management.ManagementFactory;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
@@ -109,15 +108,6 @@ public final class AotCache {
             }
         }
         return null;
-    }
-
-    /**
-     * Return the JVM input arguments of the current process, excluding arguments passed
-     * to the main method.
-     * @return the current JVM input arguments
-     */
-    public static List<String> currentJvmArguments() {
-        return ManagementFactory.getRuntimeMXBean().getInputArguments();
     }
 
     /**

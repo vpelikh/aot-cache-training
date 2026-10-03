@@ -155,6 +155,27 @@ class AotCacheTests {
         }
     }
 
+    @Test
+    void embedCacheIntoJarInPlaceKeepsExistingEntries(@TempDir Path tempDir) throws Exception {
+        Path bootJar = tempDir.resolve("app.jar");
+        try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(bootJar))) {
+            out.putNextEntry(new JarEntry("BOOT-INF/classes/app.txt"));
+            out.write("hello".getBytes(StandardCharsets.UTF_8));
+            out.closeEntry();
+        }
+        Path cache = tempDir.resolve("application.aot");
+        Files.writeString(cache, "cache-bytes");
+
+        AotCache.embedCacheIntoJar(bootJar, cache, bootJar);
+
+        try (ZipFile zip = new ZipFile(bootJar.toFile())) {
+            assertThat(zip.getEntry("BOOT-INF/classes/app.txt")).as("existing entry preserved").isNotNull();
+            ZipEntry entry = zip.getEntry("aot-cache/application.aot");
+            assertThat(entry).isNotNull();
+            assertThat(new String(zip.getInputStream(entry).readAllBytes())).isEqualTo("cache-bytes");
+        }
+    }
+
     private static String unixMode(Path jar, String name) throws Exception {
         byte[] bytes = Files.readAllBytes(jar);
         ByteBuffer buffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN);

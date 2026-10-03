@@ -127,7 +127,10 @@ public final class AppProcess {
      */
     public void start(URI readyCheck) throws IOException {
         Files.createDirectories(this.layoutDirectory);
-        Files.createDirectories(this.cacheFile.toAbsolutePath().getParent());
+        Path cacheParent = this.cacheFile.toAbsolutePath().getParent();
+        if (cacheParent != null) {
+            Files.createDirectories(cacheParent);
+        }
         extract();
         begin(buildCommand(readyCheck), readyCheck);
     }

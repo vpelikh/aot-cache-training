@@ -24,6 +24,7 @@ import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.nio.file.StandardCopyOption;
 import java.util.List;
 import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
@@ -137,7 +138,8 @@ public final class AotCache {
      * without read permission, which makes the buildpack fail with "permission denied".
      * @param bootJar the application JAR to copy
      * @param cacheFile the recorded cache to embed
-     * @param outputJar the destination JAR (overwritten)
+     * @param outputJar the destination JAR (overwritten); may equal {@code bootJar} to embed
+     * in place
      * @throws IOException if the JARs cannot be read or written
      */
     public static void embedCacheIntoJar(Path bootJar, Path cacheFile, Path outputJar) throws IOException {
@@ -147,35 +149,46 @@ public final class AotCache {
         if (parent != null) {
             Files.createDirectories(parent);
         }
-        Files.deleteIfExists(outputJar);
-        try (ZipFile zip = new ZipFile(bootJar.toFile());
-                ZipOutputStream out = new ZipOutputStream(
-                        Files.newOutputStream(outputJar))) {
-            var entries = zip.entries();
-            while (entries.hasMoreElements()) {
-                ZipEntry entry = entries.nextElement();
-                // Skip any cache entry already present, so embedding into an already-embedded
-                // JAR replaces it instead of adding a duplicate.
-                if (entry.getName().equals(directoryEntry) || entry.getName().equals(fileEntry)) {
-                    continue;
-                }
-                out.putNextEntry(new ZipEntry(entry));
-                if (!entry.isDirectory()) {
-                    try (InputStream in = zip.getInputStream(entry)) {
-                        in.transferTo(out);
+        // Write to a temporary sibling and move it into place, so embedding in place
+        // (outputJar == bootJar) does not delete the file that is still being read, and a
+        // failed write never leaves a truncated JAR behind.
+        Path staging = Files.createTempFile((parent != null) ? parent : Path.of("."),
+                outputJar.getFileName().toString(), ".tmp");
+        try {
+            try (ZipFile zip = new ZipFile(bootJar.toFile());
+                    ZipOutputStream out = new ZipOutputStream(
+                            Files.newOutputStream(staging))) {
+                var entries = zip.entries();
+                while (entries.hasMoreElements()) {
+                    ZipEntry entry = entries.nextElement();
+                    // Skip any cache entry already present, so embedding into an already-embedded
+                    // JAR replaces it instead of adding a duplicate.
+                    if (entry.getName().equals(directoryEntry) || entry.getName().equals(fileEntry)) {
+                        continue;
                     }
+                    out.putNextEntry(new ZipEntry(entry));
+                    if (!entry.isDirectory()) {
+                        try (InputStream in = zip.getInputStream(entry)) {
+                            in.transferTo(out);
+                        }
+                    }
+                    out.closeEntry();
+                }
+                out.putNextEntry(new ZipEntry(directoryEntry));
+                out.closeEntry();
+                out.putNextEntry(new ZipEntry(fileEntry));
+                try (InputStream in = Files.newInputStream(cacheFile)) {
+                    in.transferTo(out);
                 }
                 out.closeEntry();
             }
-            out.putNextEntry(new ZipEntry(directoryEntry));
-            out.closeEntry();
-            out.putNextEntry(new ZipEntry(fileEntry));
-            try (InputStream in = Files.newInputStream(cacheFile)) {
-                in.transferTo(out);
-            }
-            out.closeEntry();
+            applyUnixModes(staging, directoryEntry, fileEntry);
+            Files.move(staging, outputJar, StandardCopyOption.REPLACE_EXISTING);
         }
-        applyUnixModes(outputJar, directoryEntry, fileEntry);
+        catch (IOException ex) {
+            Files.deleteIfExists(staging);
+            throw ex;
+        }
     }
 
     private static final int UNIX_FILE_MODE = 0100644;

@@ -263,6 +263,50 @@ class AotCacheTrainingPluginFunctionalTests {
     }
 
     @Test
+    @EnabledIf("io.github.vpelikh.aot.gradle.AotCacheTrainingPluginFunctionalTests#jdkSupportsRecording")
+    void allowEmptyWorkloadRecordsWhenNoTestsAreDiscovered() throws IOException {
+        // allowEmptyWorkload must reach the launcher even though the argument provider that
+        // contributes it is the same one that carries the application and cache paths.
+        write("build.gradle.kts", """
+                plugins {
+                    java
+                    id("org.springframework.boot") version "%s"
+                    id("io.github.vpelikh.aot-cache-training")
+                }
+
+                repositories {
+                    mavenCentral()
+                }
+
+                dependencies {
+                    implementation(platform("org.springframework.boot:spring-boot-dependencies:%s"))
+                    implementation("org.springframework.boot:spring-boot-starter-web")
+                    testImplementation("org.springframework.boot:spring-boot-starter-test")
+                    testRuntimeOnly("org.junit.platform:junit-platform-launcher")
+                }
+
+                tasks.test {
+                    useJUnitPlatform()
+                }
+
+                aotCacheTraining {
+                    enabled = true
+                    allowEmptyWorkload = true
+                }
+                """.formatted(SPRING_BOOT_VERSION, SPRING_BOOT_VERSION));
+        writeHttpTests("""
+                package sample;
+
+                class NotATest {
+                }
+                """);
+
+        BuildResult result = runner("aotCacheTraining", "verifyAotCache").build();
+
+        assertThat(this.projectDir.resolve("build/aot-cache/application.aot")).exists();
+    }
+
+    @Test
     void imageBuildKeepsBootJarWhenRecordingIsDisabled() throws IOException {
         // Overwrite with a disabled configuration plus a probe that resolves the JAR the image
         // build would package. With recording disabled the embed task is skipped, so

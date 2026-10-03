@@ -267,7 +267,6 @@ public class AotCacheTrainingPlugin implements Plugin<Project> {
             return launcher.stream().distinct().toList();
         }));
         task.setClasspath(classpath);
-        task.getArgumentProviders().add(new AotCacheArgsProvider(extension));
 
         // Resolve the packaged application JAR lazily so the plugin does not force task
         // realization at configuration time. The application process records the cache, so

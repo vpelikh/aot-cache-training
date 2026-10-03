@@ -262,6 +262,86 @@ class AotCacheTrainingPluginFunctionalTests {
         assertThat(result.getOutput()).contains("No tests were discovered");
     }
 
+    @Test
+    void imageBuildKeepsBootJarWhenRecordingIsDisabled() throws IOException {
+        // Overwrite with a disabled configuration plus a probe that resolves the JAR the image
+        // build would package. With recording disabled the embed task is skipped, so
+        // bootBuildImage must still point at the normal boot JAR rather than the never-produced
+        // aot-cache-image/application.jar.
+        write("build.gradle.kts", """
+                plugins {
+                    java
+                    id("org.springframework.boot") version "%s"
+                    id("io.github.vpelikh.aot-cache-training")
+                }
+
+                repositories {
+                    mavenCentral()
+                }
+
+                dependencies {
+                    implementation(platform("org.springframework.boot:spring-boot-dependencies:%s"))
+                    implementation("org.springframework.boot:spring-boot-starter-web")
+                }
+
+                aotCacheTraining {
+                    enabled = false
+                }
+
+                tasks.register("probeImageArchive") {
+                    dependsOn("bootJar")
+                    doLast {
+                        val buildImage = tasks.named("bootBuildImage").get()
+                            as org.springframework.boot.gradle.tasks.bundling.BootBuildImage
+                        println("IMAGE_ARCHIVE=" + buildImage.archiveFile.get().asFile.name)
+                    }
+                }
+                """.formatted(SPRING_BOOT_VERSION, SPRING_BOOT_VERSION));
+
+        BuildResult result = runner("probeImageArchive").build();
+
+        assertThat(result.getOutput()).contains("IMAGE_ARCHIVE=sample.jar");
+        assertThat(result.getOutput()).doesNotContain("aot-cache-image/application.jar");
+    }
+
+    @Test
+    void imageBuildUsesEmbeddedJarWhenRecordingIsEnabled() throws IOException {
+        write("build.gradle.kts", """
+                plugins {
+                    java
+                    id("org.springframework.boot") version "%s"
+                    id("io.github.vpelikh.aot-cache-training")
+                }
+
+                repositories {
+                    mavenCentral()
+                }
+
+                dependencies {
+                    implementation(platform("org.springframework.boot:spring-boot-dependencies:%s"))
+                    implementation("org.springframework.boot:spring-boot-starter-web")
+                }
+
+                aotCacheTraining {
+                    enabled = true
+                }
+
+                tasks.register("probeImageArchive") {
+                    doLast {
+                        val buildImage = tasks.named("bootBuildImage").get()
+                            as org.springframework.boot.gradle.tasks.bundling.BootBuildImage
+                        println("IMAGE_ARCHIVE=" + buildImage.archiveFile.get().asFile.name)
+                        println("AOT_FLAG=" + buildImage.environment.get()["BP_JVM_AOTCACHE_ENABLED"])
+                    }
+                }
+                """.formatted(SPRING_BOOT_VERSION, SPRING_BOOT_VERSION));
+
+        BuildResult result = runner("probeImageArchive").build();
+
+        assertThat(result.getOutput()).contains("IMAGE_ARCHIVE=application.jar");
+        assertThat(result.getOutput()).contains("AOT_FLAG=true");
+    }
+
     private void writeApplication() throws IOException {
         write("src/main/java/sample/App.java", """
                 package sample;

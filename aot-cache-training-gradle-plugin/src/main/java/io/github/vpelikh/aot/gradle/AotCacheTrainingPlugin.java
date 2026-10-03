@@ -184,12 +184,26 @@ public class AotCacheTrainingPlugin implements Plugin<Project> {
                     RegularFileProperty archiveFile = (RegularFileProperty) buildImageType
                         .getMethod("getArchiveFile")
                         .invoke(buildImage);
-                    archiveFile.set(embed.flatMap(EmbedAotCacheTask::getOutputJar));
+                    // Resolve the enabled state lazily: the build script sets
+                    // aotCacheTraining.enabled after this configuration callback runs. When
+                    // recording is disabled the embed task is skipped, so bootBuildImage must
+                    // keep using its normal boot JAR instead of the never-produced output.
+                    Provider<File> imageArchive = project.getProviders().provider(() -> {
+                        if (Boolean.TRUE.equals(extension.getEnabled().getOrElse(false))) {
+                            return embed.get().getOutputJar().getAsFile().get();
+                        }
+                        return project.getTasks().named("bootJar", Jar.class)
+                            .flatMap(Jar::getArchiveFile)
+                            .get()
+                            .getAsFile();
+                    });
+                    archiveFile.set(project.getLayout().file(imageArchive));
                     @SuppressWarnings("unchecked")
                     MapProperty<String, String> environment = (MapProperty<String, String>) buildImageType
                         .getMethod("getEnvironment")
                         .invoke(buildImage);
-                    environment.put("BP_JVM_AOTCACHE_ENABLED", "true");
+                    environment.put("BP_JVM_AOTCACHE_ENABLED", project.getProviders()
+                        .provider(() -> Boolean.toString(Boolean.TRUE.equals(extension.getEnabled().getOrElse(false)))));
                 }
                 catch (ReflectiveOperationException ex) {
                     throw new IllegalStateException("Unable to configure bootBuildImage for the AOT cache", ex);

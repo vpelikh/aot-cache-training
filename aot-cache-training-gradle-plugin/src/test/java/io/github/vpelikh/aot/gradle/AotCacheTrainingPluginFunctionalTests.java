@@ -19,6 +19,9 @@ package io.github.vpelikh.aot.gradle;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.ArrayList;
+import java.util.Arrays;
+import java.util.List;
 
 import org.gradle.testkit.runner.BuildResult;
 import org.gradle.testkit.runner.GradleRunner;
@@ -31,11 +34,14 @@ import static org.assertj.core.api.Assertions.assertThat;
 
 /**
  * Functional tests for {@link AotCacheTrainingPlugin} using Gradle TestKit. On JDK 25+ the
- * tests exercise a real AOT cache recording run through the trainer.
+ * tests exercise a real AOT cache recording run: the packaged Spring Boot application starts
+ * in its own JVM and the black-box HTTP tests drive it.
  *
  * @author Vasily Pelikh
  */
 class AotCacheTrainingPluginFunctionalTests {
+
+    static final String SPRING_BOOT_VERSION = "4.1.1";
 
     static boolean jdkSupportsRecording() {
         return Runtime.version().feature() >= 25;
@@ -58,6 +64,7 @@ class AotCacheTrainingPluginFunctionalTests {
         write("build.gradle.kts", """
                 plugins {
                     java
+                    id("org.springframework.boot") version "%s"
                     id("io.github.vpelikh.aot-cache-training")
                 }
 
@@ -66,8 +73,9 @@ class AotCacheTrainingPluginFunctionalTests {
                 }
 
                 dependencies {
-                    testImplementation(platform("org.junit:junit-bom:6.1.3"))
-                    testImplementation("org.junit.jupiter:junit-jupiter")
+                    implementation(platform("org.springframework.boot:spring-boot-dependencies:%s"))
+                    implementation("org.springframework.boot:spring-boot-starter-web")
+                    testImplementation("org.springframework.boot:spring-boot-starter-test")
                     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
                 }
 
@@ -78,16 +86,35 @@ class AotCacheTrainingPluginFunctionalTests {
                 aotCacheTraining {
                     enabled = true
                 }
-                """);
-        write("src/test/java/sample/SampleTests.java", """
+                """.formatted(SPRING_BOOT_VERSION, SPRING_BOOT_VERSION));
+        writeApplication();
+        writeHttpTests("""
                 package sample;
+
+                import java.net.URI;
+                import java.net.http.HttpClient;
+                import java.net.http.HttpRequest;
+                import java.net.http.HttpResponse;
 
                 import org.junit.jupiter.api.Test;
 
-                class SampleTests {
+                import static org.assertj.core.api.Assertions.assertThat;
+                import static org.junit.jupiter.api.Assumptions.assumeTrue;
+
+                class SampleHttpTests {
 
                     @Test
-                    void passes() {
+                    void greetsOverHttp() throws Exception {
+                        String baseUrl = System.getProperty("aot.training.url");
+                        assumeTrue(baseUrl != null, "no application running");
+                        HttpClient client = HttpClient.newHttpClient();
+                        for (int i = 0; i < 3; i++) {
+                            HttpResponse<String> response = client.send(
+                                    HttpRequest.newBuilder(URI.create(baseUrl + "/")).build(),
+                                    HttpResponse.BodyHandlers.ofString());
+                            assertThat(response.statusCode()).isEqualTo(200);
+                            assertThat(response.body()).contains("Hello");
+                        }
                     }
 
                 }
@@ -96,7 +123,7 @@ class AotCacheTrainingPluginFunctionalTests {
 
     @Test
     @EnabledIf("io.github.vpelikh.aot.gradle.AotCacheTrainingPluginFunctionalTests#jdkSupportsRecording")
-    void recordsCacheFromTestsOnJarOnlyClasspath() {
+    void recordsCacheFromPackagedApplication() {
         BuildResult result = runner("aotCacheTraining", "verifyAotCache").build();
 
         assertThat(result.task(":aotCacheTraining").getOutcome()).isNotNull();
@@ -107,9 +134,11 @@ class AotCacheTrainingPluginFunctionalTests {
 
     @Test
     void recordingIsInertWhenDisabled() throws IOException {
+        // Overwrite with a disabled configuration.
         write("build.gradle.kts", """
                 plugins {
                     java
+                    id("org.springframework.boot") version "%s"
                     id("io.github.vpelikh.aot-cache-training")
                 }
 
@@ -118,33 +147,41 @@ class AotCacheTrainingPluginFunctionalTests {
                 }
 
                 dependencies {
-                    testImplementation(platform("org.junit:junit-bom:6.1.3"))
-                    testImplementation("org.junit.jupiter:junit-jupiter")
+                    implementation(platform("org.springframework.boot:spring-boot-dependencies:%s"))
+                    implementation("org.springframework.boot:spring-boot-starter-web")
+                    testImplementation("org.springframework.boot:spring-boot-starter-test")
                     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
                 }
 
                 tasks.test {
                     useJUnitPlatform()
                 }
-                """);
+
+                aotCacheTraining {
+                    enabled = false
+                }
+                """.formatted(SPRING_BOOT_VERSION, SPRING_BOOT_VERSION));
 
         BuildResult result = runner("aotCacheTraining", "verifyAotCache").build();
 
-        assertThat(result.getOutput()).doesNotContain("Recording an AOT cache");
+        assertThat(this.projectDir.resolve("build/aot-cache/application.aot")).doesNotExist();
     }
 
     @Test
     @EnabledIf("io.github.vpelikh.aot.gradle.AotCacheTrainingPluginFunctionalTests#jdkSupportsRecording")
     void failingTestsFailTheTrainingRunByDefault() throws IOException {
-        write("src/test/java/sample/SampleTests.java", """
+        writeHttpTests("""
                 package sample;
 
                 import org.junit.jupiter.api.Test;
 
-                class SampleTests {
+                import static org.junit.jupiter.api.Assumptions.assumeTrue;
+
+                class SampleHttpTests {
 
                     @Test
                     void fails() {
+                        assumeTrue(System.getProperty("aot.training.url") != null, "no application running");
                         throw new AssertionError("boom");
                     }
 
@@ -162,6 +199,7 @@ class AotCacheTrainingPluginFunctionalTests {
         write("build.gradle.kts", """
                 plugins {
                     java
+                    id("org.springframework.boot") version "%s"
                     id("io.github.vpelikh.aot-cache-training")
                 }
 
@@ -170,8 +208,9 @@ class AotCacheTrainingPluginFunctionalTests {
                 }
 
                 dependencies {
-                    testImplementation(platform("org.junit:junit-bom:6.1.3"))
-                    testImplementation("org.junit.jupiter:junit-jupiter")
+                    implementation(platform("org.springframework.boot:spring-boot-dependencies:%s"))
+                    implementation("org.springframework.boot:spring-boot-starter-web")
+                    testImplementation("org.springframework.boot:spring-boot-starter-test")
                     testRuntimeOnly("org.junit.platform:junit-platform-launcher")
                 }
 
@@ -183,16 +222,19 @@ class AotCacheTrainingPluginFunctionalTests {
                     enabled = true
                     failOnTestFailure = false
                 }
-                """);
-        write("src/test/java/sample/SampleTests.java", """
+                """.formatted(SPRING_BOOT_VERSION, SPRING_BOOT_VERSION));
+        writeHttpTests("""
                 package sample;
 
                 import org.junit.jupiter.api.Test;
 
-                class SampleTests {
+                import static org.junit.jupiter.api.Assumptions.assumeTrue;
+
+                class SampleHttpTests {
 
                     @Test
                     void fails() {
+                        assumeTrue(System.getProperty("aot.training.url") != null, "no application running");
                         throw new AssertionError("boom");
                     }
 
@@ -207,9 +249,8 @@ class AotCacheTrainingPluginFunctionalTests {
     @Test
     @EnabledIf("io.github.vpelikh.aot.gradle.AotCacheTrainingPluginFunctionalTests#jdkSupportsRecording")
     void noTestsFailsTheTrainingRunByDefault() throws IOException {
-        // Remove the test so nothing is discovered.
-        java.nio.file.Files.delete(this.projectDir.resolve("src/test/java/sample/SampleTests.java"));
-        write("src/test/java/sample/NotATest.java", """
+        // Replace the test with a non-test type so nothing is discovered.
+        writeHttpTests("""
                 package sample;
 
                 class NotATest {
@@ -221,8 +262,38 @@ class AotCacheTrainingPluginFunctionalTests {
         assertThat(result.getOutput()).contains("No tests were discovered");
     }
 
+    private void writeApplication() throws IOException {
+        write("src/main/java/sample/App.java", """
+                package sample;
+
+                import org.springframework.boot.SpringApplication;
+                import org.springframework.boot.autoconfigure.SpringBootApplication;
+                import org.springframework.web.bind.annotation.GetMapping;
+                import org.springframework.web.bind.annotation.RestController;
+
+                @SpringBootApplication
+                @RestController
+                public class App {
+
+                    public static void main(String[] args) {
+                        SpringApplication.run(App.class, args);
+                    }
+
+                    @GetMapping("/")
+                    public String hello() {
+                        return "Hello";
+                    }
+
+                }
+                """);
+    }
+
+    private void writeHttpTests(String content) throws IOException {
+        write("src/test/java/sample/SampleHttpTests.java", content);
+    }
+
     private GradleRunner runner(String... arguments) {
-        java.util.List<String> args = new java.util.ArrayList<>(java.util.Arrays.asList(arguments));
+        List<String> args = new ArrayList<>(Arrays.asList(arguments));
         args.add("--stacktrace");
         return GradleRunner.create()
             .withProjectDir(this.projectDir.toFile())

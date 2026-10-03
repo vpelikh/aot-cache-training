@@ -21,7 +21,7 @@ plugins {
     alias(libs.plugins.plugin.publish)
 }
 
-description = "Gradle plugin that records a JVM AOT cache from integration tests"
+description = "Gradle plugin that records a JVM AOT cache from the packaged application driven by integration tests"
 
 dependencies {
     implementation(project(":aot-cache-training"))
@@ -42,7 +42,7 @@ gradlePlugin {
         create("aotCacheTraining") {
             id = "io.github.vpelikh.aot-cache-training"
             displayName = "AOT cache training"
-            description = "Records a JVM AOT cache from integration tests by injecting -XX:AOTCacheOutput"
+            description = "Records a JVM AOT cache by driving the packaged application from integration tests"
             implementationClass = "io.github.vpelikh.aot.gradle.AotCacheTrainingPlugin"
             tags.set(listOf("aot", "cache", "jvm", "testing", "jvm-aot-cache"))
         }

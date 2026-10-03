@@ -18,6 +18,7 @@ package io.github.vpelikh.aot.maven;
 
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.util.Properties;
 
 import org.apache.maven.model.Build;
 import org.apache.maven.plugin.MojoExecutionException;
@@ -82,7 +83,7 @@ class AotCacheVerifyMojoTests {
         Build build = new Build();
         build.setDirectory("target");
         project.getModel().setBuild(build);
-        project.getModel().setProperties(new java.util.Properties());
+        project.getModel().setProperties(new Properties());
         project.setBuild(build);
         AotCacheVerifyMojo mojo = new AotCacheVerifyMojo();
         mojo.setProject(project);

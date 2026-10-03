@@ -28,8 +28,8 @@ import org.jspecify.annotations.Nullable;
  * Central knowledge about the JVM AOT cache (JEP 483 / JEP 514) as recorded during a
  * training run.
  *
- * <p>This class is deliberately free of any Spring dependency so it can be used by build
- * tooling and by the test-time listener alike.
+ * <p>This class is free of any test-framework dependency so it can be used by build
+ * tooling and by the training launcher alike.
  *
  * <p>The single-step recording workflow introduced in JDK 25 (JEP 514) is a JVM
  * command-line flag:

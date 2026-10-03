@@ -16,51 +16,68 @@
 
 package io.github.vpelikh.aot.maven;
 
+import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
+import java.security.CodeSource;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.jar.JarFile;
+import java.util.jar.Manifest;
+import java.util.regex.Matcher;
+import java.util.regex.Pattern;
+import java.util.stream.Collectors;
+import java.util.stream.Stream;
+
+import javax.inject.Inject;
 
 import io.github.vpelikh.aot.AotCache;
 import io.github.vpelikh.aot.JUnitPlatformVersion;
-import io.github.vpelikh.aot.trainer.TrainingClasspath;
+import io.github.vpelikh.aot.trainer.OutOfProcessTrainingLauncher;
+import org.apache.maven.artifact.DependencyResolutionRequiredException;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
 import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
+import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
+import org.eclipse.aether.RepositorySystem;
+import org.eclipse.aether.RepositorySystemSession;
+import org.eclipse.aether.artifact.Artifact;
+import org.eclipse.aether.artifact.DefaultArtifact;
+import org.eclipse.aether.repository.RemoteRepository;
+import org.eclipse.aether.resolution.ArtifactRequest;
+import org.eclipse.aether.resolution.ArtifactResolutionException;
+import org.eclipse.aether.resolution.ArtifactResult;
 
 /**
- * Records a JVM AOT cache (JEP 483 / JEP 514) from the project's tests.
+ * Records a JVM AOT cache (JEP 483 / JEP 514) from the packaged application driven by the
+ * project's integration tests.
  *
- * <p>This goal runs the tests through
- * <code>io.github.vpelikh.aot.trainer.TrainingLauncher</code> in a forked JVM started with
- * <code>-XX:AOTCacheOutput=&lt;build&gt;/aot-cache/application.aot</code>. The JVM assembles
- * the cache on clean exit.
+ * <p>This goal starts the packaged application in its own JVM (optionally inside
+ * <code>containerImage</code>) through
+ * <code>io.github.vpelikh.aot.trainer.OutOfProcessTrainingLauncher</code> with
+ * <code>-XX:AOTCacheOutput=&lt;build&gt;/aot-cache/application.aot</code>, then runs the
+ * integration tests as an external HTTP client of that application. The application JVM
+ * assembles the cache on clean exit.
  *
- * <p>The application and test classes are packaged into JARs first: the JVM refuses to
- * record a cache when the class path contains a non-empty directory
- * (<code>Cannot have non-empty directory in paths</code>).
+ * <p>Recording against the packaged application's own class path is what makes the cache
+ * usable by that application (including a container image built from it): an AOT cache only
+ * loads against the exact class path it was recorded with. This goal therefore needs the
+ * repackaged application JAR, so run it after the <code>package</code> phase (bind it to
+ * <code>verify</code>, or run <code>mvn package aot-cache-training:record</code>).
  *
  * <p>Enable via the <code>aot.cache.record</code> property or the <code>enabled</code>
- * parameter. By default the goal is bound to the <code>process-test-classes</code> phase,
- * after the test classes have been compiled.
- *
- * <p>Set <code>outOfProcess</code> to record a cache the container image can load: the
- * packaged application runs in its own JVM (optionally inside <code>containerImage</code>)
- * and the tests drive it over HTTP (see
- * <code>io.github.vpelikh.aot.trainer.OutOfProcessTrainingLauncher</code>). This mode needs
- * the repackaged application JAR, so run the <code>package</code> phase first (bind the
- * goal to <code>verify</code>, or run <code>mvn package aot-cache-training:record</code>).
+ * parameter.
  *
  * @author Vasily Pelikh
  */
-@Mojo(name = "record", defaultPhase = LifecyclePhase.PROCESS_TEST_CLASSES,
-        requiresDependencyResolution = org.apache.maven.plugins.annotations.ResolutionScope.TEST, threadSafe = true)
+@Mojo(name = "record", defaultPhase = LifecyclePhase.VERIFY,
+        requiresDependencyResolution = ResolutionScope.TEST, threadSafe = true)
 public class AotCacheRecordMojo extends AbstractMojo {
 
     /**
@@ -72,14 +89,14 @@ public class AotCacheRecordMojo extends AbstractMojo {
     @Parameter(defaultValue = "${project}", readonly = true, required = true)
     private MavenProject project;
 
-    @javax.inject.Inject
-    private org.eclipse.aether.RepositorySystem repositorySystem;
+    @Inject
+    private RepositorySystem repositorySystem;
 
     @Parameter(defaultValue = "${repositorySystemSession}", readonly = true)
-    private org.eclipse.aether.RepositorySystemSession repositorySystemSession;
+    private RepositorySystemSession repositorySystemSession;
 
     @Parameter(defaultValue = "${project.remoteProjectRepositories}", readonly = true)
-    private java.util.List<org.eclipse.aether.repository.RemoteRepository> remoteRepositories;
+    private List<RemoteRepository> remoteRepositories;
 
     /**
      * Whether to record an AOT cache. Can also be set with <code>-Daot.cache.record=true</code>.
@@ -127,39 +144,30 @@ public class AotCacheRecordMojo extends AbstractMojo {
     private String trainingJvm;
 
     /**
-     * Whether to record the cache out of process: the packaged application runs in its own
-     * JVM (optionally inside <code>containerImage</code>) and the tests drive it over HTTP, so
-     * the recorded class path <em>is</em> the runtime class path. Required to produce a
-     * cache the container image can load. Defaults to <code>false</code> (in-process).
-     */
-    @Parameter(property = "aot.cache.outOfProcess", defaultValue = "false")
-    private boolean outOfProcess;
-
-    /**
-     * The packaged application JAR used for out-of-process training. When unset, the
-     * repackaged Spring Boot JAR in the build directory is located automatically.
+     * The packaged application JAR whose JVM records the cache. When unset, the repackaged
+     * Spring Boot JAR in the build directory is located automatically.
      */
     @Parameter(property = "aot.cache.applicationJar")
     private String applicationJar;
 
     /**
      * A URL polled until it returns a 2xx/3xx response, used as the readiness check and the
-     * base URL for out-of-process training. Defaults to <code>http://localhost:8080/</code>.
+     * base URL for the training run. Defaults to <code>http://localhost:8080/</code>.
      */
     @Parameter(defaultValue = "http://localhost:8080/")
     private String readyUrl = "http://localhost:8080/";
 
     /**
-     * The application start class used for out-of-process training. When unset, it is read
-     * from the packaged JAR's <code>Start-Class</code> manifest attribute.
+     * The application start class. When unset, it is read from the packaged JAR's
+     * <code>Start-Class</code> manifest attribute.
      */
     @Parameter
     private String startClass;
 
     /**
-     * A container image whose JVM records the out-of-process cache. When set, the packaged
-     * application runs inside that image, so the recorded cache matches the image's JVM
-     * build and architecture and can be loaded by that image at runtime.
+     * A container image whose JVM records the cache. When set, the packaged application runs
+     * inside that image, so the recorded cache matches the image's JVM build and architecture
+     * and can be loaded by that image at runtime.
      */
     @Parameter
     private String containerImage;
@@ -172,15 +180,15 @@ public class AotCacheRecordMojo extends AbstractMojo {
     private String containerRuntime = "docker";
 
     /**
-     * Arguments passed to the application during out-of-process training (for example, to
-     * set a Spring profile).
+     * Arguments passed to the application during training (for example, to set a Spring
+     * profile).
      */
     @Parameter
     private List<String> applicationArguments = new ArrayList<>();
 
     /**
-     * How long to wait for the application to become ready during out-of-process training,
-     * in seconds. Defaults to <code>120</code>.
+     * How long to wait for the application to become ready during training, in seconds.
+     * Defaults to <code>120</code>.
      */
     @Parameter(defaultValue = "120")
     private int startTimeout = 120;
@@ -196,12 +204,11 @@ public class AotCacheRecordMojo extends AbstractMojo {
             return;
         }
         Path cacheFile = resolveCacheFile();
-        Path workDirectory = cacheFile.getParent().resolve("classpath");
         checkTrainingJdk();
         try {
-            Files.createDirectories(workDirectory);
-            List<String> command = buildCommand(cacheFile, workDirectory);
-            getLog().info("Recording AOT cache to " + cacheFile + " (JAR-only class path).");
+            Files.createDirectories(cacheFile.getParent());
+            List<String> command = buildCommand(cacheFile);
+            getLog().info("Recording AOT cache to " + cacheFile + " from the packaged application.");
             if (getLog().isDebugEnabled()) {
                 getLog().debug("Training command: " + String.join(" ", command));
             }
@@ -216,20 +223,14 @@ public class AotCacheRecordMojo extends AbstractMojo {
         }
     }
 
-    private List<String> buildCommand(Path cacheFile, Path workDirectory) throws IOException {
+    private List<String> buildCommand(Path cacheFile) throws IOException {
         List<String> command = new ArrayList<>();
         command.add(javaExecutable());
-        if (this.outOfProcess) {
-            command.add("-cp");
-            command.add(jarOnlyClasspath(workDirectory));
-            command.addAll(outOfProcessArguments(cacheFile));
-        }
-        else {
-            command.add(AotCache.recordingArgument(cacheFile));
-            command.add("-cp");
-            command.add(jarOnlyClasspath(workDirectory));
-            command.add("io.github.vpelikh.aot.trainer.TrainingLauncher");
-        }
+        // Only the client tests run in this JVM; the packaged application records the cache
+        // in its own JVM, so no recording flag is added here.
+        command.add("-cp");
+        command.add(testClasspath());
+        command.addAll(outOfProcessArguments(cacheFile));
         for (String packageName : this.packagesToScan) {
             command.add("--select-package=" + packageName);
         }
@@ -243,12 +244,12 @@ public class AotCacheRecordMojo extends AbstractMojo {
     }
 
     /**
-     * Build the arguments that launch an out-of-process training run: the launcher class
-     * followed by the application, cache, readiness and container options. The application
-     * JVM records the cache (see {@code OutOfProcessTrainingLauncher}); the launcher JVM only
-     * runs the client tests, so no recording flag is added here.
+     * Build the arguments that launch the training run: the launcher class followed by the
+     * application, cache, readiness and container options. The application JVM records the
+     * cache (see {@code OutOfProcessTrainingLauncher}); the launcher JVM only runs the client
+     * tests, so no recording flag is added here.
      * @param cacheFile the AOT cache output path
-     * @return the out-of-process launcher arguments
+     * @return the launcher arguments
      * @throws IOException if the packaged application JAR cannot be located
      */
     List<String> outOfProcessArguments(Path cacheFile) throws IOException {
@@ -276,10 +277,10 @@ public class AotCacheRecordMojo extends AbstractMojo {
     }
 
     /**
-     * Resolve the packaged application JAR for out-of-process training. When
+     * Resolve the packaged application JAR whose JVM records the cache. When
      * <code>applicationJar</code> is unset, the repackaged Spring Boot JAR in the build
-     * directory is located automatically (the largest relocated <code>.jar</code> whose
-     * manifest declares a <code>Start-Class</code>).
+     * directory is located automatically (the largest <code>.jar</code> whose manifest
+     * declares a <code>Start-Class</code>).
      * @return the application JAR
      * @throws IOException if no application JAR can be found
      */
@@ -295,7 +296,7 @@ public class AotCacheRecordMojo extends AbstractMojo {
             .toPath()
             .resolve(this.project.getBuild().getDirectory());
         Path located = null;
-        try (java.util.stream.Stream<Path> stream = Files.walk(buildDirectory)) {
+        try (Stream<Path> stream = Files.walk(buildDirectory)) {
             for (Path candidate : stream.filter(Files::isRegularFile)
                 .filter((path) -> path.getFileName().toString().endsWith(".jar"))
                 .filter(this::hasPlainStartClass)
@@ -318,8 +319,8 @@ public class AotCacheRecordMojo extends AbstractMojo {
      * not the loader's {@code Main-Class}).
      */
     private boolean hasPlainStartClass(Path jar) {
-        try (java.util.jar.JarFile jarFile = new java.util.jar.JarFile(jar.toFile())) {
-            java.util.jar.Manifest manifest = jarFile.getManifest();
+        try (JarFile jarFile = new JarFile(jar.toFile())) {
+            Manifest manifest = jarFile.getManifest();
             String startClass = (manifest != null) ? manifest.getMainAttributes().getValue("Start-Class") : null;
             return startClass != null && !startClass.isBlank();
         }
@@ -329,18 +330,19 @@ public class AotCacheRecordMojo extends AbstractMojo {
     }
 
     /**
-     * Build a class path with no non-empty directory, as required by the JVM for AOT cache
-     * recording. Directory entries (for example <code>target/test-classes</code>) are packaged
-     * into JARs; JAR entries are kept as-is.
+     * Build the client test class path. Unlike the old in-process mode, directory entries
+     * are fine here: the tests run in this JVM as an external client and never record the
+     * cache, so the JVM does not require a JAR-only class path.
+     * @return the class path for the client test JVM
      */
-    String jarOnlyClasspath(Path workDirectory) throws IOException {
+    String testClasspath() throws IOException {
         List<Path> elements = new ArrayList<>();
         try {
             for (String element : this.project.getTestClasspathElements()) {
                 elements.add(Path.of(element));
             }
         }
-        catch (org.apache.maven.artifact.DependencyResolutionRequiredException ex) {
+        catch (DependencyResolutionRequiredException ex) {
             throw new IOException("Unable to resolve the test class path", ex);
         }
         // The launcher and its core helpers come from the plugin's own class path; they carry
@@ -352,9 +354,8 @@ public class AotCacheRecordMojo extends AbstractMojo {
         if (!hasJar(elements, JUnitPlatformVersion.LAUNCHER_FILE_PREFIX)) {
             elements.add(resolveLauncher());
         }
-        // Mocking libraries self-attach agents that break cache assembly.
-        elements = new ArrayList<>(TrainingClasspath.withoutMockingLibraries(elements));
-        return TrainingClasspath.jarOnlyClasspath(elements, workDirectory);
+        return elements.stream().map((element) -> element.toString()).collect(Collectors
+            .joining(File.pathSeparator));
     }
 
     /**
@@ -364,7 +365,7 @@ public class AotCacheRecordMojo extends AbstractMojo {
      */
     private List<Path> pluginClasspath() {
         List<Path> elements = new ArrayList<>();
-        addCodeSource(elements, io.github.vpelikh.aot.trainer.TrainingLauncher.class);
+        addCodeSource(elements, OutOfProcessTrainingLauncher.class);
         addCodeSource(elements, AotCache.class);
         return elements;
     }
@@ -379,15 +380,15 @@ public class AotCacheRecordMojo extends AbstractMojo {
             .or(() -> JUnitPlatformVersion.find(projectClasspathElements()))
             .orElse(JUnitPlatformVersion.DEFAULT_PLATFORM_VERSION);
         try {
-            org.eclipse.aether.artifact.Artifact artifact = new org.eclipse.aether.artifact.DefaultArtifact(
+            Artifact artifact = new DefaultArtifact(
                     "org.junit.platform", "junit-platform-launcher", "jar", version);
-            org.eclipse.aether.resolution.ArtifactRequest request = new org.eclipse.aether.resolution.ArtifactRequest(
+            ArtifactRequest request = new ArtifactRequest(
                     artifact, this.remoteRepositories, null);
-            org.eclipse.aether.resolution.ArtifactResult result = this.repositorySystem
+            ArtifactResult result = this.repositorySystem
                 .resolveArtifact(this.repositorySystemSession, request);
             return result.getArtifact().getFile().toPath();
         }
-        catch (org.eclipse.aether.resolution.ArtifactResolutionException ex) {
+        catch (ArtifactResolutionException ex) {
             throw new IOException("Unable to resolve org.junit.platform:junit-platform-launcher:" + version
                     + ". The AOT cache training run needs the JUnit Platform launcher on the training class path.", ex);
         }
@@ -413,7 +414,7 @@ public class AotCacheRecordMojo extends AbstractMojo {
                 elements.add(Path.of(element));
             }
         }
-        catch (org.apache.maven.artifact.DependencyResolutionRequiredException ex) {
+        catch (DependencyResolutionRequiredException ex) {
             // Fall through: treat as an empty class path, so the default launcher version is used.
         }
         return elements;
@@ -427,7 +428,7 @@ public class AotCacheRecordMojo extends AbstractMojo {
 
     private void addCodeSource(List<Path> target, Class<?> type) {
         try {
-            java.security.CodeSource codeSource = type.getProtectionDomain().getCodeSource();
+            CodeSource codeSource = type.getProtectionDomain().getCodeSource();
             if (codeSource != null) {
                 target.add(Path.of(codeSource.getLocation().toURI()));
             }
@@ -446,7 +447,7 @@ public class AotCacheRecordMojo extends AbstractMojo {
             Process process = new ProcessBuilder(javaExecutable(), "-version").redirectErrorStream(true).start();
             String output = new String(process.getInputStream().readAllBytes());
             process.waitFor();
-            java.util.regex.Matcher matcher = java.util.regex.Pattern.compile("version \"(\\d+)").matcher(output);
+            Matcher matcher = Pattern.compile("version \"(\\d+)").matcher(output);
             if (matcher.find()) {
                 int feature = Integer.parseInt(matcher.group(1));
                 if (feature < AotCache.MINIMUM_RECORDING_JDK) {
@@ -523,10 +524,6 @@ public class AotCacheRecordMojo extends AbstractMojo {
 
     void setTrainingJvm(String trainingJvm) {
         this.trainingJvm = trainingJvm;
-    }
-
-    void setOutOfProcess(boolean outOfProcess) {
-        this.outOfProcess = outOfProcess;
     }
 
     void setApplicationJar(String applicationJar) {

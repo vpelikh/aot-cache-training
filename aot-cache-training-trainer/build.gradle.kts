@@ -19,7 +19,7 @@ plugins {
     alias(libs.plugins.vanniktech.maven.publish)
 }
 
-description = "JUnit Platform entry point that runs the tests used as an AOT cache training workload"
+description = "Entry point that starts the packaged application and drives it with tests to record an AOT cache"
 
 dependencies {
     api(project(":aot-cache-training"))
@@ -39,22 +39,4 @@ dependencies {
     testImplementation(libs.junit.jupiter)
     testRuntimeOnly(libs.junit.platform.launcher)
     testImplementation(libs.assertj.core)
-}
-
-// Package the test fixtures and the production classes into a JAR so the end-to-end test
-// can run the launcher on a JAR-only class path, exactly as the build plugins arrange for
-// real projects.
-tasks.register<Jar>("trainingClassesJar") {
-    archiveClassifier = "training"
-    from(sourceSets["main"].output)
-    from(sourceSets["test"].output)
-}
-
-tasks.named<Test>("test") {
-    systemProperty("aot.test.runtimeClasspath", sourceSets["test"].runtimeClasspath.filter {
-        it.name.endsWith(".jar")
-    }.asPath)
-    systemProperty("aot.test.classesJar", tasks.named<Jar>("trainingClassesJar").get().archiveFile.get().asFile.absolutePath)
-    systemProperty("aot.test.coreJar", project(":aot-cache-training").tasks.named<Jar>("jar").get().archiveFile.get().asFile.absolutePath)
-    dependsOn("trainingClassesJar", ":aot-cache-training:jar")
 }

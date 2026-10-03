@@ -21,7 +21,7 @@ plugins {
     alias(libs.plugins.vanniktech.maven.publish)
 }
 
-description = "Maven plugin that records a JVM AOT cache from integration tests"
+description = "Maven plugin that records a JVM AOT cache from the packaged application driven by integration tests"
 
 extensions.configure<org.gradlex.maven.plugin.development.MavenPluginDevelopmentExtension> {
     goalPrefix.set("aot-cache-training")

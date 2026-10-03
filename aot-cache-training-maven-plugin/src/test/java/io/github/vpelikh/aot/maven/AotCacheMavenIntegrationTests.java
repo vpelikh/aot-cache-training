@@ -33,9 +33,9 @@ import static org.assertj.core.api.Assertions.assertThat;
  * End-to-end test that runs a real Maven build with the locally published
  * {@code aot-cache-training-maven-plugin} and the {@code aot-cache-training} library.
  *
- * <p>Exercises the full flow: the {@code record} goal packages the classes into JARs and
- * runs the tests through the trainer on a JAR-only class path, a real JVM records the
- * cache, and the {@code verify} goal accepts it.
+ * <p>Exercises the full flow: the {@code record} goal starts the repackaged Spring Boot
+ * application in its own JVM on a JAR-only class path, runs the black-box HTTP tests
+ * against it, a real JVM records the cache, and the {@code verify} goal accepts it.
  *
  * <p>Only runs on JDK 25+, where the single-step recording flag exists.
  *
@@ -45,6 +45,9 @@ import static org.assertj.core.api.Assertions.assertThat;
 class AotCacheMavenIntegrationTests {
 
     static final String VERSION = "0.1.0";
+
+    /** Spring Boot version used by the generated sample application; must ship a JDK 25 JVM. */
+    static final String SPRING_BOOT_VERSION = "4.1.1";
 
     static boolean jdkSupportsRecording() {
         return Runtime.version().feature() >= 25;
@@ -62,15 +65,34 @@ class AotCacheMavenIntegrationTests {
     @Test
     void recordsAndVerifiesCacheFromTests() throws Exception {
         writePom();
-        write("src/test/java/sample/SampleTests.java", """
+        writeApplication();
+        write("src/test/java/sample/SampleHttpTests.java", """
                 package sample;
+
+                import java.net.URI;
+                import java.net.http.HttpClient;
+                import java.net.http.HttpRequest;
+                import java.net.http.HttpResponse;
 
                 import org.junit.jupiter.api.Test;
 
-                class SampleTests {
+                import static org.assertj.core.api.Assertions.assertThat;
+                import static org.junit.jupiter.api.Assumptions.assumeTrue;
+
+                class SampleHttpTests {
 
                     @Test
-                    void passes() {
+                    void greetsOverHttp() throws Exception {
+                        String baseUrl = System.getProperty("aot.training.url");
+                        assumeTrue(baseUrl != null, "no application running");
+                        HttpClient client = HttpClient.newHttpClient();
+                        for (int i = 0; i < 3; i++) {
+                            HttpResponse<String> response = client.send(
+                                    HttpRequest.newBuilder(URI.create(baseUrl + "/")).build(),
+                                    HttpResponse.BodyHandlers.ofString());
+                            assertThat(response.statusCode()).isEqualTo(200);
+                            assertThat(response.body()).contains("Hello");
+                        }
                     }
 
                 }
@@ -83,36 +105,55 @@ class AotCacheMavenIntegrationTests {
         assertThat(this.projectDir.resolve("target/aot-cache/application.aot")).exists();
     }
 
-    @Test
-    void recordGoalFailsWhenNoTestsAreDiscovered() throws Exception {
-        writePom();
-        // No test sources at all.
+    private void writeApplication() throws IOException {
         write("src/main/java/sample/App.java", """
                 package sample;
 
-                class App {
+                import org.springframework.boot.SpringApplication;
+                import org.springframework.boot.autoconfigure.SpringBootApplication;
+                import org.springframework.web.bind.annotation.GetMapping;
+                import org.springframework.web.bind.annotation.RestController;
+
+                @SpringBootApplication
+                @RestController
+                public class App {
+
+                    public static void main(String[] args) {
+                        SpringApplication.run(App.class, args);
+                    }
+
+                    @GetMapping("/")
+                    public String hello() {
+                        return "Hello";
+                    }
+
                 }
                 """);
-
-        MavenResult result = runMaven("verify", "-Daot.cache.record=true");
-
-        assertThat(result.exitCode()).as("maven output:%n%s", result.output()).isNotZero();
-        assertThat(result.output()).contains("No tests were discovered");
     }
 
     private void writePom() throws IOException {
         write("pom.xml", """
                 <project xmlns="http://maven.apache.org/POM/4.0.0">
                     <modelVersion>4.0.0</modelVersion>
+                    <parent>
+                        <groupId>org.springframework.boot</groupId>
+                        <artifactId>spring-boot-starter-parent</artifactId>
+                        <version>%s</version>
+                        <relativePath/>
+                    </parent>
                     <groupId>sample</groupId>
                     <artifactId>sample</artifactId>
                     <version>1.0.0</version>
                     <properties>
-                        <maven.compiler.release>17</maven.compiler.release>
+                        <java.version>25</java.version>
                         <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
                     </properties>
                     <build>
                         <plugins>
+                            <plugin>
+                                <groupId>org.springframework.boot</groupId>
+                                <artifactId>spring-boot-maven-plugin</artifactId>
+                            </plugin>
                             <plugin>
                                 <groupId>io.github.vpelikh</groupId>
                                 <artifactId>aot-cache-training-maven-plugin</artifactId>
@@ -120,6 +161,7 @@ class AotCacheMavenIntegrationTests {
                                 <executions>
                                     <execution>
                                         <id>aot-record</id>
+                                        <phase>verify</phase>
                                         <goals>
                                             <goal>record</goal>
                                         </goals>
@@ -136,14 +178,17 @@ class AotCacheMavenIntegrationTests {
                     </build>
                     <dependencies>
                         <dependency>
-                            <groupId>org.junit.jupiter</groupId>
-                            <artifactId>junit-jupiter</artifactId>
-                            <version>6.1.3</version>
+                            <groupId>org.springframework.boot</groupId>
+                            <artifactId>spring-boot-starter-web</artifactId>
+                        </dependency>
+                        <dependency>
+                            <groupId>org.springframework.boot</groupId>
+                            <artifactId>spring-boot-starter-test</artifactId>
                             <scope>test</scope>
                         </dependency>
                     </dependencies>
                 </project>
-                """.formatted(VERSION));
+                """.formatted(SPRING_BOOT_VERSION, VERSION));
     }
 
     private MavenResult runMaven(String... goals) throws IOException, InterruptedException {

@@ -21,11 +21,10 @@ tasks.test {
 
 aotCacheTraining {
     enabled = true
-    // Record the cache for the packaged application (out of process): the app runs in its
-    // own JVM and the black-box HTTP tests drive it. This is what produces a cache the
-    // container image can load. Set containerImage to record inside a specific image so the
-    // cache matches that image's JVM build and architecture.
-    outOfProcess = true
+    // The packaged application records the cache in its own JVM and the black-box HTTP
+    // tests drive it. This is what produces a cache the packaged application (and a
+    // container image built from it) can load. Set containerImage to record inside a
+    // specific image so the cache matches that image's JVM build and architecture.
     // containerImage = "my-app:latest"
 }
 

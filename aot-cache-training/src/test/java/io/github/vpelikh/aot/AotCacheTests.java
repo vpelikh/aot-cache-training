@@ -16,6 +16,7 @@
 
 package io.github.vpelikh.aot;
 
+import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
 
@@ -84,14 +85,14 @@ class AotCacheTests {
     @Test
     void verifyRecordedCacheReturnsSizeForNonEmptyFile(@TempDir Path tempDir) throws Exception {
         Path cacheFile = tempDir.resolve("application.aot");
-        java.nio.file.Files.writeString(cacheFile, "cache-bytes");
+        Files.writeString(cacheFile, "cache-bytes");
         assertThat(AotCache.verifyRecordedCache(cacheFile)).isEqualTo("cache-bytes".length());
     }
 
     @Test
     void verifyRecordedCacheReturnsNegativeForEmptyFile(@TempDir Path tempDir) throws Exception {
         Path cacheFile = tempDir.resolve("application.aot");
-        java.nio.file.Files.createFile(cacheFile);
+        Files.createFile(cacheFile);
         assertThat(AotCache.verifyRecordedCache(cacheFile)).isEqualTo(0);
     }
 

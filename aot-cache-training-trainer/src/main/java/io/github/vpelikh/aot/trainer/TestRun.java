@@ -16,6 +16,7 @@
 
 package io.github.vpelikh.aot.trainer;
 
+import java.io.File;
 import java.io.PrintWriter;
 import java.nio.file.Path;
 import java.nio.file.Paths;
@@ -24,6 +25,7 @@ import java.util.LinkedHashSet;
 import java.util.List;
 import java.util.Set;
 
+import org.junit.platform.commons.PreconditionViolationException;
 import org.junit.platform.engine.DiscoverySelector;
 import org.junit.platform.engine.discovery.DiscoverySelectors;
 import org.junit.platform.launcher.Launcher;
@@ -35,8 +37,8 @@ import org.junit.platform.launcher.listeners.TestExecutionSummary;
 
 /**
  * Runs a JUnit Platform test selection and reports the outcome, translating the results to
- * an exit code. Shared by {@link TrainingLauncher} and {@link OutOfProcessTrainingLauncher}
- * so both training modes behave identically with respect to failing and empty workloads.
+ * an exit code. Shared by the {@link OutOfProcessTrainingLauncher} training run so failing
+ * and empty workloads behave consistently.
  *
  * @author Vasily Pelikh
  */
@@ -60,7 +62,7 @@ final class TestRun {
             Launcher launcher = LauncherFactory.create();
             launcher.execute(request, listener);
         }
-        catch (org.junit.platform.commons.PreconditionViolationException ex) {
+        catch (PreconditionViolationException ex) {
             System.err.println(SUMMARY_PREFIX + "No JUnit test engine was found on the training class path, so "
                     + "no tests can run and no cache can be recorded. Add an engine such as "
                     + "org.junit.jupiter:junit-jupiter (or junit-jupiter-engine) as a test dependency. Details: "
@@ -128,7 +130,7 @@ final class TestRun {
     private static Set<Path> classpathRoots() {
         Set<Path> roots = new LinkedHashSet<>();
         String classpath = System.getProperty("java.class.path", "");
-        for (String entry : classpath.split(java.io.File.pathSeparator)) {
+        for (String entry : classpath.split(File.pathSeparator)) {
             if (!entry.isBlank()) {
                 roots.add(Paths.get(entry));
             }

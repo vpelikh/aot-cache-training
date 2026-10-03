@@ -20,6 +20,9 @@ import java.io.IOException;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.jar.JarEntry;
+import java.util.jar.JarOutputStream;
+import java.util.jar.Manifest;
 
 import org.apache.maven.model.Build;
 import org.apache.maven.project.MavenProject;
@@ -69,7 +72,7 @@ class AotCacheRecordMojoTests {
     }
 
     @Test
-    void buildsOutOfProcessLauncherArguments(@TempDir Path basedir) throws Exception {
+    void buildsLauncherArguments(@TempDir Path basedir) throws Exception {
         Path appJar = basedir.resolve("target/app.jar");
         Files.createDirectories(appJar.getParent());
         writeBootJar(appJar, "com.example.Application");
@@ -77,7 +80,6 @@ class AotCacheRecordMojoTests {
         AotCacheRecordMojo mojo = new AotCacheRecordMojo();
         mojo.setProject(project(basedir));
         mojo.setEnabled(true);
-        mojo.setOutOfProcess(true);
         mojo.setApplicationJar(appJar.toString());
         mojo.setReadyUrl("http://localhost:8080/");
         mojo.setContainerImage("my-app:latest");
@@ -118,13 +120,12 @@ class AotCacheRecordMojoTests {
     }
 
     private void writeBootJar(Path jar, String startClass) throws IOException {
-        java.util.jar.Manifest manifest = new java.util.jar.Manifest();
+        Manifest manifest = new Manifest();
         manifest.getMainAttributes().putValue("Manifest-Version", "1.0");
         manifest.getMainAttributes().putValue("Main-Class", "org.springframework.boot.loader.launch.JarLauncher");
         manifest.getMainAttributes().putValue("Start-Class", startClass);
-        try (java.util.jar.JarOutputStream out = new java.util.jar.JarOutputStream(Files.newOutputStream(jar),
-                manifest)) {
-            out.putNextEntry(new java.util.jar.JarEntry("BOOT-INF/"));
+        try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(jar), manifest)) {
+            out.putNextEntry(new JarEntry("BOOT-INF/"));
             out.closeEntry();
         }
     }

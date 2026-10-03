@@ -17,21 +17,25 @@
 package io.github.vpelikh.aot.trainer;
 
 import java.io.IOException;
+import java.net.ServerSocket;
 import java.net.URI;
 import java.nio.file.Path;
+import java.time.Duration;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.jar.JarFile;
+import java.util.jar.Manifest;
 
 /**
  * Runs the integration tests as an external client of the packaged application while the
  * application records a JVM AOT cache in its own JVM.
  *
- * <p>This is the out-of-process counterpart to {@link TrainingLauncher}. It exists because
- * an AOT cache only loads against the exact class path it was recorded with, and the
- * class path of the packaged application ({@code runner.jar} plus {@code lib/}) is shorter
- * than a test class path. Recording from the application's own JVM makes the recorded class
- * path <em>be</em> the runtime class path, so the cache is usable by the image. The tests
- * only talk to the application over HTTP, exactly as {@code @QuarkusIntegrationTest} does.
+ * <p>This is the only training mode the plugins use. It exists because an AOT cache only
+ * loads against the exact class path it was recorded with, and the class path of the
+ * packaged application ({@code runner.jar} plus {@code lib/}) is shorter than a test class
+ * path. Recording from the application's own JVM makes the recorded class path <em>be</em>
+ * the runtime class path, so the cache is usable by the image. The tests only talk to the
+ * application over HTTP, exactly as {@code @QuarkusIntegrationTest} does.
  *
  * <p>Usage:
  *
@@ -60,7 +64,7 @@ import java.util.List;
  * <li>{@code --application-arg <value>} an application argument (repeatable).</li>
  * <li>{@code --start-timeout <seconds>} how long to wait for readiness (defaults to 120).</li>
  * </ul>
- * <p>All arguments of {@link TrainingLauncher} that restrict the test selection
+ * <p>Arguments that restrict the test selection
  * ({@code --select-package}, {@code --select-class}, {@code --no-fail-on-test-failure},
  * {@code --allow-empty}) are also recognized and applied to the test run.
  *
@@ -125,7 +129,7 @@ public final class OutOfProcessTrainingLauncher {
     }
 
     private static int findFreePort() throws IOException {
-        try (java.net.ServerSocket socket = new java.net.ServerSocket(0)) {
+        try (ServerSocket socket = new ServerSocket(0)) {
             return socket.getLocalPort();
         }
     }
@@ -136,8 +140,8 @@ public final class OutOfProcessTrainingLauncher {
     }
 
     private static String resolveStartClass(Path appJar) throws IOException {
-        try (java.util.jar.JarFile jar = new java.util.jar.JarFile(appJar.toFile())) {
-            java.util.jar.Manifest manifest = jar.getManifest();
+        try (JarFile jar = new JarFile(appJar.toFile())) {
+            Manifest manifest = jar.getManifest();
             String startClass = (manifest != null) ? manifest.getMainAttributes().getValue("Start-Class") : null;
             if (startClass == null || startClass.isBlank()) {
                 throw new IOException("The application JAR " + appJar
@@ -169,7 +173,7 @@ public final class OutOfProcessTrainingLauncher {
 
         private final List<String> applicationArguments = new ArrayList<>();
 
-        private java.time.Duration startTimeout = java.time.Duration.ofSeconds(120);
+        private Duration startTimeout = Duration.ofSeconds(120);
 
         private static Options parse(List<String> args) {
             Options options = new Options();
@@ -203,7 +207,7 @@ public final class OutOfProcessTrainingLauncher {
                     options.applicationArguments.add(argument.substring("--application-arg=".length()));
                 }
                 else if (argument.startsWith("--start-timeout=")) {
-                    options.startTimeout = java.time.Duration
+                    options.startTimeout = Duration
                         .ofSeconds(Long.parseLong(argument.substring("--start-timeout=".length())));
                 }
                 else if (argument.startsWith("--select-package=") || argument.startsWith("--select-class=")

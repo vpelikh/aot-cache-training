@@ -18,32 +18,27 @@ run, which is attractive because it already exercises realistic application code
 
 If that fits your workflow, this library gives you:
 
-- a single switch to record a cache from your tests;
+- a single switch to record a cache from your integration tests;
 - automatic reuse of the cache in container images via the
   [Paketo Spring Boot buildpack](https://github.com/paketo-buildpacks/spring-boot/pull/609)
-  (`aot-cache/application.aot`);
-- a `TestExecutionListener` that verifies the environment and eagerly initializes the
-  `ApplicationContext` so context creation is part of the training workload.
+  (`aot-cache/application.aot`).
+
+Like Quarkus (`@QuarkusIntegrationTest`), the training run boots your **packaged
+application** in its own JVM and drives it with black-box HTTP tests. Recording against the
+packaged application's own class path is the only way to produce a cache that application
+can actually load, so it is the only mode this project supports.
 
 ## The JVM constraint you must know about
 
-Recording an AOT cache with `-XX:AOTCacheOutput` **fails** if any class path entry is a
-non-empty directory:
+An AOT cache only loads against the **exact** JVM build, architecture and class path it was
+recorded with. The class path of a packaged Spring Boot application (`runner.jar` plus
+`lib/`) is **shorter** than a test class path, and the build host's JVM usually differs from
+the runtime JVM. A cache recorded by an ordinary `@SpringBootTest` run therefore can never be
+loaded by the packaged application.
 
-```
-[error][aot] Error: non-empty directory '/path/to/target/test-classes/'
-Could not create CDS archive
-Cannot have non-empty directory in paths
-```
-
-This is a JVM restriction (see HotSpot `aotClassLocation.cpp`). Because every standard
-test runner puts compiled classes on the class path as **directories**
-(`build/classes`, `target/test-classes`), simply injecting `-XX:AOTCacheOutput` into your
-normal test JVM cannot record a cache. This is why the original spring-framework approach
-still needs tooling: the classes must be packaged into JARs first.
-
-This library therefore ships a small launcher that runs your tests on a **JAR-only class
-path**.
+This library sidesteps that by starting the packaged application in its own JVM with
+`-XX:AOTCacheOutput`, so the recorded class path *is* the runtime class path. The integration
+tests run as an external client and talk to the application over HTTP.
 
 > Note: a cache also must be recorded and consumed with the same JVM distribution, OS,
 > architecture, class path contents, and many JVM flags. The JVM rejects a cache that does
@@ -54,8 +49,8 @@ path**.
 
 | Module | Purpose |
 | --- | --- |
-| `aot-cache-training` | `AotCache` helpers and `AotCacheTestExecutionListener` (auto-registered). |
-| `aot-cache-training-trainer` | `TrainingLauncher`, a JUnit Platform entry point that runs tests on a JAR-only class path, plus `TrainingClasspath` utilities. |
+| `aot-cache-training` | `AotCache` helpers and `JUnitPlatformVersion` used by the build plugins. |
+| `aot-cache-training-trainer` | `OutOfProcessTrainingLauncher`, the entry point that starts the packaged application and runs the tests as an HTTP client. |
 | `aot-cache-training-maven-plugin` | Maven `record` and `verify` goals. |
 | `aot-cache-training-gradle-plugin` | Gradle `aotCacheTraining` and `verifyAotCache` tasks. |
 
@@ -68,11 +63,14 @@ Kotlin DSL (`build.gradle.kts`):
 ```kotlin
 plugins {
     java
+    id("org.springframework.boot") version "4.1.1"
     id("io.github.vpelikh.aot-cache-training")
 }
 
 aotCacheTraining {
     enabled = true
+    // readyUrl.set("http://localhost:8080/")     // default; polled until the app is ready
+    // containerImage.set("my-app:latest")         // record inside this image's JVM
     // packagesToScan.set(listOf("com.example"))   // optional: limit the training workload
     // failOnTestFailure.set(true)                 // default
 }
@@ -83,13 +81,31 @@ Groovy DSL (`build.gradle`):
 ```groovy
 plugins {
     id 'java'
+    id 'org.springframework.boot' version '4.1.1'
     id 'io.github.vpelikh.aot-cache-training'
 }
 
 aotCacheTraining {
     enabled = true
-    // packagesToScan = ['com.example']      // optional: limit the training workload
-    // failOnTestFailure = true              // default
+    // readyUrl = 'http://localhost:8080/'      // default
+    // containerImage = 'my-app:latest'
+    // packagesToScan = ['com.example']         // optional
+    // failOnTestFailure = true                 // default
+}
+```
+
+The training workload is your black-box integration tests. They read the running
+application's base URL from the `aot.training.url` system property and drive it over HTTP:
+
+```java
+class GreetingHttpTests {
+
+    @Test
+    void greets() throws Exception {
+        String baseUrl = System.getProperty("aot.training.url");
+        // ... call the application over HTTP with java.net.http.HttpClient ...
+    }
+
 }
 ```
 
@@ -97,9 +113,13 @@ aotCacheTraining {
 ./gradlew aotCacheTraining verifyAotCache
 ```
 
-This records `build/aot-cache/application.aot`.
+This starts the packaged application (via `bootJar`), records
+`build/aot-cache/application.aot` in the application's own JVM, and verifies it.
 
 ### Maven
+
+The `record` goal needs the repackaged application JAR, so bind it to the `verify` phase
+(after `package`):
 
 ```xml
 <plugin>
@@ -109,6 +129,7 @@ This records `build/aot-cache/application.aot`.
     <executions>
         <execution>
             <id>aot-record</id>
+            <phase>verify</phase>
             <goals><goal>record</goal></goals>
         </execution>
         <execution>
@@ -123,29 +144,23 @@ This records `build/aot-cache/application.aot`.
 mvn verify -Daot.cache.record=true
 ```
 
-This records `target/aot-cache/application.aot`.
+This records `target/aot-cache/application.aot`. The plugin locates the repackaged
+application JAR automatically (or takes one with `applicationJar`).
 
 No plugin-level dependencies are needed, and the plugin never modifies your test class
 path. It derives your JUnit Platform version from the project and resolves a matching
-launcher for its own isolated training JVM, so a JUnit 5 and a JUnit 6 project both work
+launcher for its isolated client-test JVM, so a JUnit 5 and a JUnit 6 project both work
 without any extra configuration.
 
 ### Using the cache in a container image
 
 An AOT cache only loads against the **exact** JVM build, architecture and class path it was
-recorded with. The packaged application's class path (`runner.jar` plus `lib/`) is shorter
-than a test class path, and the build host's JVM usually differs from the image JRE, so a
-cache recorded by the in-process test run can **never** be loaded by the image. To produce a
-cache the image can load, enable out-of-process training: the packaged application runs in
-its own JVM and the integration tests drive it over HTTP, exactly as Quarkus does with
-`@QuarkusIntegrationTest`.
+recorded with. The build host's JVM usually differs from the image JRE, so record inside the
+image to match it:
 
 ```kotlin
 aotCacheTraining {
     enabled = true
-    outOfProcess = true
-    // Record inside the image so the cache matches that image's JVM build and architecture.
-    // Without this, the local JVM records the cache (usable when it matches the runtime JVM).
     containerImage = "my-app:latest"
 }
 ```
@@ -154,8 +169,7 @@ aotCacheTraining {
 ./gradlew aotCacheTraining bootBuildImage
 ```
 
-The equivalent Maven configuration records from the packaged application (run `package`
-first, or bind the `record` goal to the `verify` phase):
+The equivalent Maven configuration records inside the image:
 
 ```xml
 <plugin>
@@ -168,7 +182,6 @@ first, or bind the `record` goal to the `verify` phase):
             <phase>verify</phase>
             <goals><goal>record</goal></goals>
             <configuration>
-                <outOfProcess>true</outOfProcess>
                 <!-- Record inside the image so the cache matches that image's JVM build. -->
                 <containerImage>my-app:latest</containerImage>
             </configuration>
@@ -191,19 +204,7 @@ The Maven plugin locates the repackaged application JAR automatically (or takes 
 The training launcher extracts the boot jar to `runner.jar` plus `lib/`, starts it with
 `-XX:AOTCacheOutput=...` (optionally inside `containerImage`), waits for `readyUrl`, then
 runs the tests as an external client. The tests read the running application's base URL from
-the `aot.training.url` system property and call it over HTTP:
-
-```java
-class GreetingHttpTests {
-
-    @Test
-    void greets() throws Exception {
-        String baseUrl = System.getProperty("aot.training.url");
-        // ... call the application over HTTP with java.net.http.HttpClient ...
-    }
-
-}
-```
+the `aot.training.url` system property and call it over HTTP.
 
 `verifyAotCache` then fails the build if no non-empty cache was produced. Ship the cache to
 the buildpack by placing it at `aot-cache/application.aot` in the application content (for
@@ -211,33 +212,30 @@ example with `BP_INCLUDE_FILES='aot-cache/application.aot'`, or inside the packa
 Paketo Spring Boot buildpack detects it, skips its own training run, and loads it at startup
 with `-XX:AOTCache=<path>`.
 
-> In-process tests (`@SpringBootTest`) cannot drive an out-of-process application; the
-> out-of-process workload must be black-box tests that call the application over HTTP.
+> The training workload must be black-box tests that call the application over HTTP. Plain
+> `@SpringBootTest` tests run in-process and cannot drive the packaged application.
 
 ## How it works
 
-1. **Package classes into JARs.** The build plugins jar `target/test-classes` /
-   `build/classes` so the class path has no non-empty directory.
-2. **Run the training workload.** In the default (in-process) mode, `TrainingLauncher` runs
-   the configured tests through the JUnit Platform in a JVM started with
-   `-XX:AOTCacheOutput=<build>/aot-cache/application.aot`. `AotCacheTestExecutionListener`
-   eagerly initializes each `ApplicationContext` so context creation and bean initialization
-   are captured. In out-of-process mode, `OutOfProcessTrainingLauncher` starts the packaged
-   application (optionally in `containerImage`) with the same flag and runs the tests against
-   it over HTTP.
-3. **Assemble the cache.** The JVM assembles the final cache on clean exit, *after*
-   shutdown hooks run.
+1. **Package the application.** The plugin builds the Spring Boot boot JAR (`bootJar` for
+   Gradle, `package` for Maven) so the application has a packaged class path.
+2. **Run the training workload.** `OutOfProcessTrainingLauncher` extracts the boot JAR to
+   `runner.jar` plus `lib/`, starts the application in its own JVM (optionally inside
+   `containerImage`) with `-XX:AOTCacheOutput=<build>/aot-cache/application.aot`, waits for
+   `readyUrl`, and runs your tests as an external HTTP client. The application's own class
+   path is what gets recorded, so the cache matches what the image will load.
+3. **Assemble the cache.** The application JVM assembles the final cache on clean exit,
+   *after* shutdown hooks run.
 4. **Verify.** The `verify` goal / task fails the build when recording was requested but no
    non-empty cache was produced. A training run that discovers no tests also fails by
    default, because an empty workload records a large but useless cache.
 
 ### JUnit Platform version alignment
 
-The plugin resolves the launcher at your project's own JUnit Platform version and isolates
-it to the training JVM. The version is read from your resolved test dependencies (falling
-back to JAR names), so it works whether your test classes run from JARs or directories. It
-never adds JUnit (or anything else) to your test class path, so your dependency tree and
-your normal `test` task are untouched.
+The plugin resolves the test launcher at your project's own JUnit Platform version and
+isolates it to the client-test JVM. The version is read from your resolved test dependencies
+(falling back to JAR names). It never adds JUnit (or anything else) to your test class path,
+so your dependency tree and your normal `test` task are untouched.
 
 ### Training JVM
 
@@ -256,8 +254,8 @@ and runs after the training JVM exits (`AotCache.verifyRecordedCache`).
 
 - JDK 25+ to record (single-step `-XX:AOTCacheOutput`, JEP 514).
 - JDK 24+ to load a pre-recorded cache (`-XX:AOTCache`, JEP 483).
-- Spring Framework 6.2+ / Spring Boot 3.x+ for the `TestExecutionListener` (it is a no-op
-  unless recording is enabled).
+- A packaged Spring Boot application (`bootJar` / `mvn package`) with an HTTP health or
+  readiness endpoint the tests can poll, plus black-box tests that drive it over HTTP.
 - Built against JUnit Platform 6 with JUnit Platform 5 runtime compatibility, and written
   for the JDK 25 toolchain the AOT cache feature requires.
 

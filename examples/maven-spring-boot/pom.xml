@@ -47,15 +47,12 @@
                 <executions>
                     <execution>
                         <id>aot-record</id>
-                        <!-- Out-of-process recording needs the repackaged application JAR, so
-                             bind the goal after the package phase. -->
+                        <!-- The packaged application records the cache in its own JVM, so
+                             the goal runs after the package phase. -->
                         <phase>verify</phase>
                         <goals>
                             <goal>record</goal>
                         </goals>
-                        <configuration>
-                            <outOfProcess>true</outOfProcess>
-                        </configuration>
                     </execution>
                     <execution>
                         <id>aot-verify</id>

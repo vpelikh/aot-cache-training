@@ -1,6 +1,0 @@
-# Default TestExecutionListeners contributed by the AOT cache training library.
-#
-# The listener activates only when the test JVM is started with the JDK 25+
-# -XX:AOTCacheOutput flag and is a no-op otherwise.
-org.springframework.test.context.TestExecutionListener=\
-io.github.vpelikh.aot.AotCacheTestExecutionListener

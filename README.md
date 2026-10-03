@@ -24,9 +24,10 @@ If that fits your workflow, this library gives you:
   (`aot-cache/application.aot`).
 
 Like Quarkus (`@QuarkusIntegrationTest`), the training run boots your **packaged
-application** in its own JVM and drives it with black-box HTTP tests. Recording against the
-packaged application's own class path is the only way to produce a cache that application
-can actually load, so it is the only mode this project supports.
+application** in its own JVM (optionally inside a target container image) and drives it with
+black-box HTTP tests. Recording against the packaged application's own class path is the only
+way to produce a cache that application can load, so it is the only training mode this
+project provides.
 
 ## The JVM constraint you must know about
 
@@ -58,6 +59,9 @@ tests run as an external client and talk to the application over HTTP.
 
 ### Gradle
 
+The minimal setup is a single switch. The plugin builds your boot JAR, starts it in its own
+JVM, drives it with your tests, and records `build/aot-cache/application.aot`.
+
 Kotlin DSL (`build.gradle.kts`):
 
 ```kotlin
@@ -69,10 +73,6 @@ plugins {
 
 aotCacheTraining {
     enabled = true
-    // readyUrl.set("http://localhost:8080/")     // default; polled until the app is ready
-    // containerImage.set("my-app:latest")         // record inside this image's JVM
-    // packagesToScan.set(listOf("com.example"))   // optional: limit the training workload
-    // failOnTestFailure.set(true)                 // default
 }
 ```
 
@@ -87,12 +87,39 @@ plugins {
 
 aotCacheTraining {
     enabled = true
-    // readyUrl = 'http://localhost:8080/'      // default
-    // containerImage = 'my-app:latest'
-    // packagesToScan = ['com.example']         // optional
-    // failOnTestFailure = true                 // default
 }
 ```
+
+### Maven
+
+The same single switch, plus the two goals. `record` needs the repackaged application JAR,
+so it binds to the `verify` phase (after `package`) by default:
+
+```xml
+<plugin>
+    <groupId>io.github.vpelikh</groupId>
+    <artifactId>aot-cache-training-maven-plugin</artifactId>
+    <version>0.1.0</version>
+    <executions>
+        <execution>
+            <id>aot-record</id>
+            <goals><goal>record</goal></goals>
+        </execution>
+        <execution>
+            <id>aot-verify</id>
+            <goals><goal>verify</goal></goals>
+        </execution>
+    </executions>
+</plugin>
+```
+
+This records `target/aot-cache/application.aot`. The plugin locates the repackaged
+application JAR automatically (or takes one with `applicationJar`).
+
+`record` is off by default; enable it with `-Daot.cache.record=true` or `<enabled>true</enabled>`.
+The optional settings below apply here too, set through `<configuration>` (for example
+`<containerImage>`). No plugin-level dependencies are needed, and the plugin never modifies
+your test class path.
 
 The training workload is your black-box integration tests. They read the running
 application's base URL from the `aot.training.url` system property and drive it over HTTP:
@@ -109,108 +136,66 @@ class GreetingHttpTests {
 }
 ```
 
-```bash
-./gradlew aotCacheTraining verifyAotCache
-```
-
-This starts the packaged application (via `bootJar`), records
-`build/aot-cache/application.aot` in the application's own JVM, and verifies it.
-
-### Maven
-
-The `record` goal needs the repackaged application JAR, so bind it to the `verify` phase
-(after `package`):
-
-```xml
-<plugin>
-    <groupId>io.github.vpelikh</groupId>
-    <artifactId>aot-cache-training-maven-plugin</artifactId>
-    <version>0.1.0</version>
-    <executions>
-        <execution>
-            <id>aot-record</id>
-            <phase>verify</phase>
-            <goals><goal>record</goal></goals>
-        </execution>
-        <execution>
-            <id>aot-verify</id>
-            <goals><goal>verify</goal></goals>
-        </execution>
-    </executions>
-</plugin>
-```
+Run the training:
 
 ```bash
-mvn verify -Daot.cache.record=true
+./gradlew aotCacheTraining verifyAotCache     # Gradle
+mvn verify -Daot.cache.record=true            # Maven
 ```
 
-This records `target/aot-cache/application.aot`. The plugin locates the repackaged
-application JAR automatically (or takes one with `applicationJar`).
+### Optional settings
 
-No plugin-level dependencies are needed, and the plugin never modifies your test class
-path. It derives your JUnit Platform version from the project and resolves a matching
-launcher for its isolated client-test JVM, so a JUnit 5 and a JUnit 6 project both work
-without any extra configuration.
+Both build tools share the same optional settings; the ones you are most likely to touch:
+
+| Setting | Default | Purpose |
+| --- | --- | --- |
+| `readyUrl` | `http://localhost:8080/` | URL polled until the application is ready. |
+| `containerImage` | unset | Record inside this image's JVM instead of the local one. Only needed when the runtime image's JVM build or architecture differs from your build host. |
+| `packagesToScan` | unset | Limit the training workload to specific packages. |
+| `failOnTestFailure` | `true` | Fail the training run when a test fails. |
+| `allowEmptyWorkload` | `false` | Record even when no tests are discovered. |
+| `startTimeout` | `120` | Seconds to wait for the application to become ready. |
 
 ### Using the cache in a container image
 
-An AOT cache only loads against the **exact** JVM build, architecture and class path it was
-recorded with. The build host's JVM usually differs from the image JRE, so record inside the
-image to match it:
+`containerImage` is optional. Leave it unset when the runtime JVM matches your build host:
+the packaged application then records against the local JVM, and the cache loads wherever
+that same JVM build and architecture run.
+
+Set it when the cache must be loaded by an image whose JVM differs from the build host, a
+different JDK distribution or version, or a different CPU architecture. This is the common
+case: building on macOS arm64 and deploying a `linux/amd64` image produces a cache the image
+cannot load. Recording inside the image fixes it, because an AOT cache only loads against the
+**exact** JVM build, architecture and class path it was recorded with:
 
 ```kotlin
 aotCacheTraining {
     enabled = true
-    containerImage = "my-app:latest"
+    containerImage = "my-app:latest"   // the image the cache must match
 }
 ```
 
 ```bash
-./gradlew aotCacheTraining bootBuildImage
+./gradlew aotCacheTraining
 ```
 
-The equivalent Maven configuration records inside the image:
+With Maven, add the same setting to the `record` goal's configuration:
 
 ```xml
-<plugin>
-    <groupId>io.github.vpelikh</groupId>
-    <artifactId>aot-cache-training-maven-plugin</artifactId>
-    <version>0.1.0</version>
-    <executions>
-        <execution>
-            <id>aot-record</id>
-            <phase>verify</phase>
-            <goals><goal>record</goal></goals>
-            <configuration>
-                <!-- Record inside the image so the cache matches that image's JVM build. -->
-                <containerImage>my-app:latest</containerImage>
-            </configuration>
-        </execution>
-        <execution>
-            <id>aot-verify</id>
-            <goals><goal>verify</goal></goals>
-        </execution>
-    </executions>
-</plugin>
+<configuration>
+    <!-- Record inside the image so the cache matches that image's JVM build. -->
+    <containerImage>my-app:latest</containerImage>
+</configuration>
 ```
 
-```bash
-mvn verify -Daot.cache.record=true
-```
+Then ship the recorded `aot-cache/application.aot` alongside your application. The Paketo
+Spring Boot buildpack detects it, skips its own training run, and loads it at startup with
+`-XX:AOTCache=<path>`.
 
-The Maven plugin locates the repackaged application JAR automatically (or takes one with
-`applicationJar`).
-
-The training launcher extracts the boot jar to `runner.jar` plus `lib/`, starts it with
-`-XX:AOTCacheOutput=...` (optionally inside `containerImage`), waits for `readyUrl`, then
-runs the tests as an external client. The tests read the running application's base URL from
-the `aot.training.url` system property and call it over HTTP.
-
-`verifyAotCache` then fails the build if no non-empty cache was produced. Ship the cache to
-the buildpack by placing it at `aot-cache/application.aot` in the application content (for
-example with `BP_INCLUDE_FILES='aot-cache/application.aot'`, or inside the packaged jar). The
-Paketo Spring Boot buildpack detects it, skips its own training run, and loads it at startup
-with `-XX:AOTCache=<path>`.
+The released Spring Boot Gradle plugin cannot inject extra content into `bootBuildImage`, so
+this handoff is explicit. The `prepareImageContent` task in `examples/gradle-spring-boot`
+shows it: build the boot JAR, place the cache at `aot-cache/application.aot` next to it, and
+hand that directory to `pack build`.
 
 > The training workload must be black-box tests that call the application over HTTP. Plain
 > `@SpringBootTest` tests run in-process and cannot drive the packaged application.

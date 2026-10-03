@@ -83,10 +83,16 @@ public abstract class AotCacheTrainingExtension {
     public abstract Property<String> getStartClass();
 
     /**
-     * A container image whose JVM records the cache. When set, the packaged
-     * application runs inside that image, so the recorded cache matches the image's JVM build
-     * and architecture and can be loaded by that image at runtime. When unset, the local JVM
-     * records the cache (usable when it matches the runtime JVM).
+     * An optional container image whose JVM records the cache. Set this when the cache must
+     * be loaded by an image whose JVM differs from the build host (a different JDK
+     * distribution or version, or a different architecture, which is the common case when
+     * building on, for example, macOS arm64 and deploying a linux/amd64 image). The packaged
+     * application then runs inside that image and the recorded cache matches the image's JVM
+     * build and architecture.
+     *
+     * <p>When unset (the default), the packaged application records against the local JVM
+     * instead. The cache is then only loadable by that same local JVM build and architecture,
+     * so leave it unset only when the runtime JVM matches the build host.
      * @return the container-image property
      */
     public abstract Property<String> getContainerImage();

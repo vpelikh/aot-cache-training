@@ -34,7 +34,9 @@ import org.gradle.api.artifacts.Configuration;
 import org.gradle.api.artifacts.ModuleVersionIdentifier;
 import org.gradle.api.artifacts.ResolvedArtifact;
 import org.gradle.api.file.ConfigurableFileCollection;
+import org.gradle.api.file.RegularFileProperty;
 import org.gradle.api.plugins.JavaPluginExtension;
+import org.gradle.api.provider.MapProperty;
 import org.gradle.api.provider.Provider;
 import org.gradle.api.tasks.JavaExec;
 import org.gradle.api.tasks.SourceSet;
@@ -96,6 +98,12 @@ public class AotCacheTrainingPlugin implements Plugin<Project> {
      */
     public static final String VERIFY_TASK_NAME = "verifyAotCache";
 
+    /**
+     * The name of the task that embeds the recorded cache into a copy of the boot JAR, so
+     * {@code bootBuildImage} ships the cache inside the image.
+     */
+    public static final String EMBED_IMAGE_JAR_TASK_NAME = "aotCacheImageJar";
+
     private static final String GROUP = "aot";
 
     @Override
@@ -145,6 +153,49 @@ public class AotCacheTrainingPlugin implements Plugin<Project> {
 
         // Verification requires the recording task.
         project.getTasks().named(VERIFY_TASK_NAME).configure((task) -> task.dependsOn(record));
+
+        // Embed the cache into a copy of the boot JAR and point bootBuildImage at it, so the
+        // image build picks the cache up without any manual jar-append step. Registered
+        // lazily and applied only when the Spring Boot plugin's bootBuildImage exists.
+        project.getPlugins().withId("org.springframework.boot", (bootPlugin) -> {
+            TaskProvider<EmbedAotCacheTask> embed = project.getTasks()
+                .register(EMBED_IMAGE_JAR_TASK_NAME, EmbedAotCacheTask.class, (task) -> {
+                    task.setGroup(GROUP);
+                    task.setDescription("Embeds the recorded AOT cache into a copy of the boot JAR for the image build");
+                    task.dependsOn(record, "bootJar");
+                    task.onlyIf("AOT cache recording is enabled",
+                            (unused) -> Boolean.TRUE.equals(extension.getEnabled().getOrElse(false)));
+                    task.getBootJar().set(project.getTasks().named("bootJar", Jar.class)
+                        .flatMap((jar) -> jar.getArchiveFile()));
+                    task.getCacheFile().set(cacheFile.toFile());
+                    task.getOutputJar().set(project.getLayout()
+                        .getBuildDirectory()
+                        .file("aot-cache-image/application.jar"));
+                });
+            project.getTasks().named("bootBuildImage").configure((buildImage) -> {
+                buildImage.dependsOn(embed);
+                // BootBuildImage is not a compile dependency (the Spring Boot plugin is
+                // optional), so its properties are set reflectively:
+                //  - point the image build at the cache-embedded JAR;
+                //  - enable the buildpack's AOT-cache mode, which is what makes it look for a
+                //    pre-recorded aot-cache/application.aot instead of running its own training.
+                try {
+                    Class<?> buildImageType = buildImage.getClass();
+                    RegularFileProperty archiveFile = (RegularFileProperty) buildImageType
+                        .getMethod("getArchiveFile")
+                        .invoke(buildImage);
+                    archiveFile.set(embed.flatMap(EmbedAotCacheTask::getOutputJar));
+                    @SuppressWarnings("unchecked")
+                    MapProperty<String, String> environment = (MapProperty<String, String>) buildImageType
+                        .getMethod("getEnvironment")
+                        .invoke(buildImage);
+                    environment.put("BP_JVM_AOTCACHE_ENABLED", "true");
+                }
+                catch (ReflectiveOperationException ex) {
+                    throw new IllegalStateException("Unable to configure bootBuildImage for the AOT cache", ex);
+                }
+            });
+        });
     }
 
     private void configureTraining(Project project, AotCacheTrainingExtension extension, JavaExec task, Path cacheFile) {

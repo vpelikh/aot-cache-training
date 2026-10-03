@@ -23,6 +23,8 @@ import java.util.List;
 import java.util.jar.JarEntry;
 import java.util.jar.JarOutputStream;
 import java.util.jar.Manifest;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 
 import org.apache.maven.model.Build;
 import org.apache.maven.project.MavenProject;
@@ -117,6 +119,39 @@ class AotCacheRecordMojoTests {
 
         assertThatIOException().isThrownBy(
                 () -> mojo.outOfProcessArguments(basedir.resolve("target/aot-cache/application.aot")));
+    }
+
+    @Test
+    void embedsCacheIntoApplicationJarAndRepackageBackup(@TempDir Path basedir) throws Exception {
+        Path appJar = basedir.resolve("target/app-1.0.0.jar");
+        Files.createDirectories(appJar.getParent());
+        writeBootJar(appJar, "com.example.Application");
+        Path backupJar = appJar.resolveSibling("app-1.0.0.jar.original");
+        writeBootJar(backupJar, "com.example.Application");
+        Path cacheFile = basedir.resolve("target/aot-cache/application.aot");
+        Files.createDirectories(cacheFile.getParent());
+        Files.write(cacheFile, new byte[] { 1, 2, 3 });
+
+        AotCacheRecordMojo mojo = new AotCacheRecordMojo();
+        mojo.setProject(project(basedir));
+
+        mojo.embedCacheInApplicationJar(cacheFile);
+
+        assertThat(Files.readAllBytes(cachedEntry(appJar, "aot-cache/application.aot"))).isEqualTo(new byte[] { 1, 2, 3 });
+        assertThat(Files.readAllBytes(cachedEntry(backupJar, "aot-cache/application.aot")))
+            .isEqualTo(new byte[] { 1, 2, 3 });
+    }
+
+    private Path cachedEntry(Path jar, String name) throws IOException {
+        try (ZipFile zip = new ZipFile(jar.toFile())) {
+            ZipEntry entry = zip.getEntry(name);
+            assertThat(entry).as("entry %s in %s", name, jar).isNotNull();
+            Path extracted = Files.createTempFile("extracted", ".aot");
+            try (var in = zip.getInputStream(entry)) {
+                Files.write(extracted, in.readAllBytes());
+            }
+            return extracted;
+        }
     }
 
     private void writeBootJar(Path jar, String startClass) throws IOException {

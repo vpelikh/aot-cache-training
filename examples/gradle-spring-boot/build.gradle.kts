@@ -30,38 +30,11 @@ aotCacheTraining {
 
 // Recording produces build/aot-cache/application.aot.
 //
-// To ship that cache in a container image, place it at aot-cache/application.aot in the
-// application content that you hand to the Paketo Spring Boot buildpack. The buildpack
-// detects it, skips the training run, and loads it at startup with -XX:AOTCache=<path>.
+// The plugin's `aotCacheImageJar` task embeds that cache into a copy of the boot JAR, and
+// `bootBuildImage` is wired to use that copy, so the image ships the cache with no manual
+// step:
 //
-// For example, with paketo `pack` and a directory that holds the built jar plus the cache:
+//   ./gradlew bootBuildImage
 //
-//   ./gradlew aotCacheTraining bootJar
-//   mkdir -p build/image-content/aot-cache
-//   cp build/libs/gradle-spring-boot-example-*.jar build/image-content/
-//   cp build/aot-cache/application.aot build/image-content/aot-cache/
-//   pack build my-app --path build/image-content --builder paketobuildpacks/builder-jammy-base
-//
-// The released Spring Boot Gradle plugin cannot inject additional content into
-// bootBuildImage directly, so this handoff is explicit. See the README for details.
-tasks.register("prepareImageContent") {
-    group = "aot"
-    description = "Assembles the application jar and the recorded AOT cache for a container build"
-    dependsOn("aotCacheTraining", "bootJar")
-    doLast {
-        val contentDirectory = layout.buildDirectory.dir("image-content").get().asFile
-        val cacheDirectory = File(contentDirectory, "aot-cache")
-        cacheDirectory.mkdirs()
-        copy {
-            from(layout.buildDirectory.dir("libs"))
-            include("*.jar")
-            exclude("*-plain.jar", "*-tests.jar")
-            into(contentDirectory)
-        }
-        copy {
-            from(layout.buildDirectory.file("aot-cache/application.aot"))
-            into(cacheDirectory)
-        }
-        logger.lifecycle("Image content prepared in {}", contentDirectory)
-    }
-}
+// The Paketo Spring Boot buildpack finds aot-cache/application.aot inside the application
+// content, skips its own training run, and loads the cache at startup with -XX:AOTCache.

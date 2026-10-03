@@ -39,6 +39,21 @@
             <plugin>
                 <groupId>org.springframework.boot</groupId>
                 <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <image>
+                        <env>
+                            <!-- The buildpack only looks for a pre-recorded aot-cache/application.aot
+                                 when its AOT-cache mode is on. -->
+                            <BP_JVM_AOTCACHE_ENABLED>true</BP_JVM_AOTCACHE_ENABLED>
+                            <!-- Load the cache with the same JDK that recorded it (25). -->
+                            <BP_JVM_VERSION>25</BP_JVM_VERSION>
+                            <!-- spring-boot:build-image re-lays-out the application and moves a
+                                 top-level aot-cache/ under BOOT-INF/classes/, so point the
+                                 buildpack at the delivered location. -->
+                            <BP_JVM_AOTCACHE_PATH>BOOT-INF/classes/aot-cache/application.aot</BP_JVM_AOTCACHE_PATH>
+                        </env>
+                    </image>
+                </configuration>
             </plugin>
             <plugin>
                 <groupId>io.github.vpelikh</groupId>

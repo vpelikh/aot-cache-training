@@ -21,6 +21,8 @@ import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
 
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -102,7 +104,16 @@ class AotCacheMavenIntegrationTests {
 
         assertThat(result.exitCode()).as("maven output:%n%s", result.output()).isZero();
         assertThat(result.output()).contains("Verified AOT cache");
+        assertThat(result.output()).contains("Embedded the AOT cache into");
         assertThat(this.projectDir.resolve("target/aot-cache/application.aot")).exists();
+        // The cache must be inside the packaged application JAR, where the buildpack looks.
+        Path appJar = Files.list(this.projectDir.resolve("target"))
+            .filter((path) -> path.getFileName().toString().endsWith(".jar"))
+            .findFirst()
+            .orElseThrow();
+        try (ZipFile zip = new ZipFile(appJar.toFile())) {
+            assertThat(zip.getEntry("aot-cache/application.aot")).as("cache embedded in the app JAR").isNotNull();
+        }
     }
 
     private void writeApplication() throws IOException {

@@ -17,10 +17,17 @@
 package io.github.vpelikh.aot;
 
 import java.io.IOException;
+import java.io.InputStream;
 import java.lang.management.ManagementFactory;
+import java.nio.ByteBuffer;
+import java.nio.ByteOrder;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.zip.ZipEntry;
+import java.util.zip.ZipFile;
+import java.util.zip.ZipOutputStream;
 
 import org.jspecify.annotations.Nullable;
 
@@ -117,6 +124,113 @@ public final class AotCache {
      */
     public static Path defaultCacheFile(Path buildOutputDirectory) {
         return buildOutputDirectory.resolve(CACHE_DIRECTORY).resolve(CACHE_FILE_NAME);
+    }
+
+    /**
+     * Copy an application JAR and append the recorded cache as {@code aot-cache/application.aot},
+     * so a buildpack finds it inside the packaged application content.
+     *
+     * <p>Existing entries are copied verbatim, including their compression method, so stored
+     * nested JARs stay stored. The appended entries are given a POSIX mode ({@code 0644} for
+     * the file, {@code 0755} for the directory) by patching the ZIP central directory:
+     * {@link ZipEntry} cannot store one, and an entry without a mode extracts
+     * without read permission, which makes the buildpack fail with "permission denied".
+     * @param bootJar the application JAR to copy
+     * @param cacheFile the recorded cache to embed
+     * @param outputJar the destination JAR (overwritten)
+     * @throws IOException if the JARs cannot be read or written
+     */
+    public static void embedCacheIntoJar(Path bootJar, Path cacheFile, Path outputJar) throws IOException {
+        String directoryEntry = CACHE_DIRECTORY + "/";
+        String fileEntry = directoryEntry + CACHE_FILE_NAME;
+        Path parent = outputJar.toAbsolutePath().getParent();
+        if (parent != null) {
+            Files.createDirectories(parent);
+        }
+        Files.deleteIfExists(outputJar);
+        try (ZipFile zip = new ZipFile(bootJar.toFile());
+                ZipOutputStream out = new ZipOutputStream(
+                        Files.newOutputStream(outputJar))) {
+            var entries = zip.entries();
+            while (entries.hasMoreElements()) {
+                ZipEntry entry = entries.nextElement();
+                // Skip any cache entry already present, so embedding into an already-embedded
+                // JAR replaces it instead of adding a duplicate.
+                if (entry.getName().equals(directoryEntry) || entry.getName().equals(fileEntry)) {
+                    continue;
+                }
+                out.putNextEntry(new ZipEntry(entry));
+                if (!entry.isDirectory()) {
+                    try (InputStream in = zip.getInputStream(entry)) {
+                        in.transferTo(out);
+                    }
+                }
+                out.closeEntry();
+            }
+            out.putNextEntry(new ZipEntry(directoryEntry));
+            out.closeEntry();
+            out.putNextEntry(new ZipEntry(fileEntry));
+            try (InputStream in = Files.newInputStream(cacheFile)) {
+                in.transferTo(out);
+            }
+            out.closeEntry();
+        }
+        applyUnixModes(outputJar, directoryEntry, fileEntry);
+    }
+
+    private static final int UNIX_FILE_MODE = 0100644;
+
+    private static final int UNIX_DIR_MODE = 0040755;
+
+    /** "version made by": Unix creator OS (3) and ZIP spec 3.0 (30). */
+    private static final int VERSION_MADE_BY_UNIX = (3 << 8) | 30;
+
+    private static final long CENTRAL_HEADER_SIGNATURE = 0x02014b50L;
+
+    private static final long END_OF_CENTRAL_DIRECTORY_SIGNATURE = 0x06054b50L;
+
+    private static final int CENTRAL_HEADER_SIZE = 46;
+
+    private static void applyUnixModes(Path jar, String directoryEntry, String fileEntry) throws IOException {
+        byte[] bytes = Files.readAllBytes(jar);
+        ByteBuffer buffer = ByteBuffer.wrap(bytes).order(ByteOrder.LITTLE_ENDIAN);
+        int offset = findCentralDirectoryOffset(buffer);
+        while (offset + CENTRAL_HEADER_SIZE <= bytes.length
+                && Integer.toUnsignedLong(buffer.getInt(offset)) == CENTRAL_HEADER_SIGNATURE) {
+            int nameLength = Short.toUnsignedInt(buffer.getShort(offset + 28));
+            int extraLength = Short.toUnsignedInt(buffer.getShort(offset + 30));
+            int commentLength = Short.toUnsignedInt(buffer.getShort(offset + 32));
+            String name = new String(bytes, offset + CENTRAL_HEADER_SIZE, nameLength,
+                    StandardCharsets.UTF_8);
+            int mode = 0;
+            if (name.equals(directoryEntry)) {
+                mode = UNIX_DIR_MODE;
+            }
+            else if (name.equals(fileEntry)) {
+                mode = UNIX_FILE_MODE;
+            }
+            if (mode != 0) {
+                // "version made by" must say Unix, otherwise readers ignore the mode; the
+                // external attributes hold the mode in their high 16 bits.
+                buffer.putShort(offset + 4, (short) VERSION_MADE_BY_UNIX);
+                buffer.putInt(offset + 38, mode << 16);
+            }
+            offset += CENTRAL_HEADER_SIZE + nameLength + extraLength + commentLength;
+        }
+        Files.write(jar, bytes);
+    }
+
+    private static int findCentralDirectoryOffset(ByteBuffer buffer) throws IOException {
+        int length = buffer.capacity();
+        ByteBuffer tail = buffer.duplicate().order(ByteOrder.LITTLE_ENDIAN);
+        // The end-of-central-directory record is at most 22 bytes plus a 65535-byte comment.
+        for (int candidate = length - 22; candidate >= Math.max(0, length - 22 - 65535); candidate--) {
+            tail.position(candidate);
+            if (Integer.toUnsignedLong(tail.getInt()) == END_OF_CENTRAL_DIRECTORY_SIGNATURE) {
+                return tail.getInt(candidate + 16);
+            }
+        }
+        throw new IOException("Not a valid ZIP/JAR: end-of-central-directory record not found");
     }
 
     /**

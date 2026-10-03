@@ -19,6 +19,7 @@ package io.github.vpelikh.aot.trainer;
 import java.io.IOException;
 import java.net.HttpURLConnection;
 import java.net.URI;
+import java.nio.charset.StandardCharsets;
 import java.nio.file.FileVisitResult;
 import java.nio.file.Files;
 import java.nio.file.Path;
@@ -89,6 +90,8 @@ public final class AppProcess {
 
     private Process process;
 
+    private String containerName;
+
     /**
      * Create a harness.
      * @param appJar the packaged Spring Boot application JAR
@@ -134,6 +137,9 @@ public final class AppProcess {
      * @return {@code true} if the process exited on its own after the stop request
      */
     public boolean stop() {
+        if (this.containerName != null) {
+            return stopContainer();
+        }
         if (this.process == null) {
             return false;
         }
@@ -152,13 +158,93 @@ public final class AppProcess {
         }
     }
 
+    /**
+     * Stop the container with {@code <runtime> stop}, which sends SIGTERM to the
+     * application process inside it. The container is run detached precisely so this is
+     * possible: killing an attached {@code docker run} client instead terminates the
+     * container abruptly, and the JVM never assembles the cache.
+     */
+    private boolean stopContainer() {
+        if (!run(List.of(this.containerRuntime, "stop", "--timeout", Long.toString(STOP_TIMEOUT.toSeconds()),
+                this.containerName))) {
+            run(List.of(this.containerRuntime, "rm", "-f", this.containerName));
+            return false;
+        }
+        // `docker stop` waits for the container to exit, which happens once the JVM has run
+        // its shutdown hooks and assembled the cache. The container's own exit status is 143
+        // (128 + SIGTERM) by design, so success is judged by the stop command, not that code.
+        run(List.of(this.containerRuntime, "wait", this.containerName));
+        run(List.of(this.containerRuntime, "rm", "-f", this.containerName));
+        return true;
+    }
+
+    private boolean run(List<String> command) {
+        try {
+            ProcessBuilder builder = new ProcessBuilder(command);
+            builder.redirectErrorStream(true);
+            builder.redirectOutput(logFile("container.log").toFile());
+            Process runner = builder.start();
+            return runner.waitFor(STOP_TIMEOUT.toSeconds() + 10, TimeUnit.SECONDS) && runner.exitValue() == 0;
+        }
+        catch (IOException ex) {
+            return false;
+        }
+        catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            return false;
+        }
+    }
+
     private void begin(List<String> command, URI readyCheck) throws IOException {
+        if (this.containerImage != null) {
+            beginContainer(command, readyCheck);
+            return;
+        }
         ProcessBuilder builder = new ProcessBuilder(command);
         builder.directory(this.layoutDirectory.toFile());
         builder.redirectErrorStream(true);
         builder.redirectOutput(logFile("application.log").toFile());
         this.process = builder.start();
         awaitReady(readyCheck);
+    }
+
+    /**
+     * Start the recording container detached and remember its id, so it can later be
+     * stopped gracefully with {@code <runtime> stop}. An attached {@code docker run} is not
+     * usable here: killing its client leaves no way to send SIGTERM to the JVM inside, and
+     * an abruptly killed JVM never assembles the cache.
+     */
+    private void beginContainer(List<String> command, URI readyCheck) throws IOException {
+        // Capture stdout directly: with -d, the runtime prints the container id there.
+        ProcessBuilder builder = new ProcessBuilder(command);
+        builder.directory(this.layoutDirectory.toFile());
+        builder.redirectErrorStream(true);
+        Process runner = builder.start();
+        String output = new String(runner.getInputStream().readAllBytes(), StandardCharsets.UTF_8).trim();
+        int exit = waitFor(runner, STOP_TIMEOUT);
+        if (exit != 0) {
+            Files.writeString(logFile("application.log"), output);
+            throw new IOException("Unable to start the recording container: " + output);
+        }
+        this.containerName = output.lines().findFirst().orElse("").trim();
+        if (this.containerName.isEmpty()) {
+            throw new IOException("Unable to start the recording container: no container id was returned");
+        }
+        awaitReady(readyCheck);
+    }
+
+    private static int waitFor(Process process, Duration timeout) throws IOException {
+        try {
+            if (process.waitFor(timeout.toSeconds(), TimeUnit.SECONDS)) {
+                return process.exitValue();
+            }
+            process.destroyForcibly();
+            throw new IOException("Timed out after " + timeout);
+        }
+        catch (InterruptedException ex) {
+            Thread.currentThread().interrupt();
+            throw new IOException("Interrupted while waiting for a process", ex);
+        }
     }
 
     private Path logFile(String name) throws IOException {
@@ -194,7 +280,12 @@ public final class AppProcess {
         List<String> command = new ArrayList<>();
         command.add(this.containerRuntime);
         command.add("run");
-        command.add("--rm");
+        // Detached (-d) with a fixed name: the container is stopped through the runtime, which
+        // delivers SIGTERM to the application so it exits cleanly and assembles the cache.
+        // An attached run cannot be stopped gracefully from here.
+        command.add("-d");
+        command.add("--name");
+        command.add(containerNameFor(readyCheck));
         // Publish the application port so the host-side tests can reach it, which works both
         // with native Linux host networking and with Docker Desktop's port forwarding.
         command.add("-p");
@@ -205,14 +296,19 @@ public final class AppProcess {
         command.add(this.cacheFile.toAbsolutePath().getParent() + ":" + CONTAINER_CACHE_DIR);
         command.add("-w");
         command.add(CONTAINER_APP_DIR);
-        command.add(this.containerImage);
+        command.add("--entrypoint");
         command.add("java");
+        command.add(this.containerImage);
         command.add(AotCache.recordingArgument(Path.of(CONTAINER_CACHE_DIR, cacheName)));
         command.add("-cp");
         command.add("runner.jar");
         command.add(this.startClass);
         command.addAll(this.applicationArguments);
         return command;
+    }
+
+    private String containerNameFor(URI readyCheck) {
+        return "aot-cache-training-" + Integer.toHexString((this.cacheFile.toAbsolutePath() + readyCheck.toString()).hashCode());
     }
 
     private int defaultPort(String scheme) {
@@ -290,7 +386,7 @@ public final class AppProcess {
         long deadline = System.nanoTime() + this.startTimeout.toNanos();
         IOException lastFailure = null;
         while (System.nanoTime() < deadline) {
-            if (!this.process.isAlive()) {
+            if (this.process != null && !this.process.isAlive()) {
                 throw new IOException("Application exited with " + this.process.exitValue()
                         + " before becoming ready, see " + logDirectory().resolve("application.log"));
             }

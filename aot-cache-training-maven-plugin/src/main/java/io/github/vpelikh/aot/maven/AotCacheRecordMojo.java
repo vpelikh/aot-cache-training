@@ -19,6 +19,7 @@ package io.github.vpelikh.aot.maven;
 import java.io.File;
 import java.io.IOException;
 import java.nio.file.Files;
+import java.nio.file.StandardCopyOption;
 import java.nio.file.Path;
 import java.security.CodeSource;
 import java.util.ArrayList;
@@ -199,6 +200,14 @@ public class AotCacheRecordMojo extends AbstractMojo {
     @Parameter(defaultValue = "120")
     private int startTimeout = 120;
 
+    /**
+     * Whether to embed the recorded cache into the packaged application JAR, so
+     * {@code spring-boot:build-image} ships it with no manual step. Defaults to
+     * <code>true</code>; set to <code>false</code> to leave the JAR untouched.
+     */
+    @Parameter(property = "aot.cache.embedInApplicationJar", defaultValue = "true")
+    private boolean embedInApplicationJar = true;
+
     @Override
     public void execute() throws MojoExecutionException {
         if (this.skip) {
@@ -223,9 +232,49 @@ public class AotCacheRecordMojo extends AbstractMojo {
                 throw new MojoExecutionException(
                         "AOT cache training run failed with exit code " + exitCode + ". See the output above for details.");
             }
+            if (this.embedInApplicationJar) {
+                embedCacheInApplicationJar(cacheFile);
+            }
         }
         catch (IOException ex) {
             throw new MojoExecutionException("Unable to prepare the AOT cache training run", ex);
+        }
+    }
+
+    /**
+     * Place the recorded cache inside the packaged application JAR, where the Paketo Spring
+     * Boot buildpack looks for it, so {@code spring-boot:build-image} ships it with no manual
+     * step. The recorded JAR is rewritten atomically, preserving every existing entry.
+     *
+     * <p>{@code spring-boot:build-image} does not hand the buildpack the repackaged JAR: its
+     * {@code ImagePackager} re-lays-out the application from the plain backup
+     * ({@code <finalName>.jar.original}) produced by the {@code repackage} goal. The cache is
+     * therefore embedded into that backup as well, when present, so it reaches the image
+     * content instead of being dropped with the repackaged JAR.
+     * @param cacheFile the recorded cache
+     * @throws IOException if the application JAR cannot be embedded into
+     */
+    void embedCacheInApplicationJar(Path cacheFile) throws IOException {
+        Path appJar = resolveApplicationJar();
+        embedCacheInto(appJar, cacheFile);
+        getLog().info("Embedded the AOT cache into " + appJar);
+        Path backupJar = appJar.resolveSibling(appJar.getFileName() + ".original");
+        if (Files.isRegularFile(backupJar)) {
+            embedCacheInto(backupJar, cacheFile);
+            getLog().info("Embedded the AOT cache into " + backupJar
+                    + " (spring-boot:build-image packages the image from this backup)");
+        }
+    }
+
+    private void embedCacheInto(Path applicationJar, Path cacheFile) throws IOException {
+        Path embedded = applicationJar.resolveSibling(applicationJar.getFileName() + ".aot-embedded");
+        AotCache.embedCacheIntoJar(applicationJar, cacheFile, embedded);
+        try {
+            Files.move(embedded, applicationJar, StandardCopyOption.REPLACE_EXISTING);
+        }
+        catch (IOException ex) {
+            Files.deleteIfExists(embedded);
+            throw ex;
         }
     }
 
@@ -558,6 +607,10 @@ public class AotCacheRecordMojo extends AbstractMojo {
 
     void setStartTimeout(int startTimeout) {
         this.startTimeout = startTimeout;
+    }
+
+    void setEmbedInApplicationJar(boolean embedInApplicationJar) {
+        this.embedInApplicationJar = embedInApplicationJar;
     }
 
 }

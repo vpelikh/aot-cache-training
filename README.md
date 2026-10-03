@@ -188,14 +188,27 @@ With Maven, add the same setting to the `record` goal's configuration:
 </configuration>
 ```
 
-Then ship the recorded `aot-cache/application.aot` alongside your application. The Paketo
-Spring Boot buildpack detects it, skips its own training run, and loads it at startup with
-`-XX:AOTCache=<path>`.
+Then build the image. Both plugins wire this up for you with no manual `jar` step: they
+embed the recorded `aot-cache/application.aot` into the packaged application JAR, where the
+buildpack looks for it.
 
-The released Spring Boot Gradle plugin cannot inject extra content into `bootBuildImage`, so
-this handoff is explicit. The `prepareImageContent` task in `examples/gradle-spring-boot`
-shows it: build the boot JAR, place the cache at `aot-cache/application.aot` next to it, and
-hand that directory to `pack build`.
+```bash
+./gradlew bootBuildImage                                   # Gradle
+mvn verify spring-boot:build-image-no-fork -Daot.cache.record=true   # Maven
+```
+
+The Paketo Spring Boot buildpack finds `aot-cache/application.aot` in the application
+content, skips its own training run, and loads the cache at startup with `-XX:AOTCache`.
+
+- Gradle points `bootBuildImage` at a cache-embedded copy of the boot JAR automatically.
+- Maven embeds the cache during the `record` goal into both the repackaged application JAR and
+  its `target/<finalName>.jar.original` backup, because `spring-boot:build-image` re-lays-out the
+  application from that backup (`<embedInApplicationJar>false</embedInApplicationJar>` to opt
+  out). Use `build-image-no-fork`, not `build-image`: the forking `build-image` goal reruns
+  `package` and would overwrite the embedded JAR.
+
+> Pre-recorded cache support needs Paketo Spring Boot buildpack **5.39.0 or later**, and the
+> `bootBuildImage` builder must bundle it.
 
 > The training workload must be black-box tests that call the application over HTTP. Plain
 > `@SpringBootTest` tests run in-process and cannot drive the packaged application.

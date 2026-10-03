@@ -19,6 +19,7 @@ package io.github.vpelikh.aot;
 import java.nio.ByteBuffer;
 import java.nio.ByteOrder;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.FileSystems;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.nio.file.attribute.PosixFilePermission;
@@ -34,6 +35,7 @@ import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * Tests for {@link AotCache}.
@@ -181,6 +183,8 @@ class AotCacheTests {
 
     @Test
     void embedCacheIntoJarPreservesTheOutputJarPermissions(@TempDir Path tempDir) throws Exception {
+        assumeTrue(FileSystems.getDefault().supportedFileAttributeViews().contains("posix"),
+                "POSIX file system required");
         Set<PosixFilePermission> expected = PosixFilePermissions.fromString("rw-r--r--");
         Path bootJar = tempDir.resolve("app.jar");
         try (JarOutputStream out = new JarOutputStream(Files.newOutputStream(bootJar))) {

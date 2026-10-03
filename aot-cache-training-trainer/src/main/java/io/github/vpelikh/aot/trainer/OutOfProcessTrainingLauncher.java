@@ -103,8 +103,13 @@ public final class OutOfProcessTrainingLauncher {
                 options.javaExecutable, options.startClass, options.applicationArguments, options.startTimeout,
                 options.containerImage, options.containerRuntime);
         int exitCode;
-        process.start(options.readyUrl);
+        boolean started = false;
+        // Keep the start inside the try: if the application never becomes ready (or extraction
+        // or the container fails), the finally must still stop what was started, otherwise the
+        // application process (or container) is orphaned when this JVM exits.
         try {
+            process.start(options.readyUrl);
+            started = true;
             String baseUrl = baseUrl(options.readyUrl);
             System.setProperty(TRAINING_URL_PROPERTY, baseUrl);
             System.out.println("[aot-cache-training] Application is ready at " + baseUrl
@@ -114,7 +119,7 @@ public final class OutOfProcessTrainingLauncher {
         }
         finally {
             boolean stopped = process.stop();
-            if (!stopped) {
+            if (started && !stopped) {
                 System.out.println("[aot-cache-training] Warning: the application did not stop cleanly, so the "
                         + "AOT cache may not have been assembled.");
             }

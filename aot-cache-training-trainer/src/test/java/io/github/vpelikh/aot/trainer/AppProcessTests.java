@@ -58,11 +58,21 @@ class AppProcessTests {
     }
 
     @Test
-    void cachePathWithoutParentIsAccepted(@TempDir Path tempDir) {
-        // A bare relative cache path has no parent; start() must not NPE while creating the
-        // (absent) parent directory.
+    void startAcceptsRelativeCachePath(@TempDir Path tempDir) {
+        // A relative cache path resolves against the working directory, so its parent exists;
+        // start() must handle it without erroring on the directory step.
         AppProcess process = process(tempDir.resolve("missing.jar"), tempDir.resolve("layout"),
                 Path.of("application.aot"));
+
+        assertThatIOException().isThrownBy(() -> process.start(URI.create("http://localhost:8080/")));
+    }
+
+    @Test
+    void startAcceptsCachePathAtAFileSystemRoot(@TempDir Path tempDir) {
+        // A filesystem root is the only path whose parent is null. start() must skip creating
+        // that (null) parent rather than throw a NullPointerException; it still fails later,
+        // because the application JAR does not exist.
+        AppProcess process = process(tempDir.resolve("missing.jar"), tempDir.resolve("layout"), Path.of("/"));
 
         assertThatIOException().isThrownBy(() -> process.start(URI.create("http://localhost:8080/")));
     }

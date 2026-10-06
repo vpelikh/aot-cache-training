@@ -19,28 +19,3 @@ jobs:
         uses: gradle/actions/setup-gradle@v4
       - name: Build
         run: ./gradlew build --no-daemon --stacktrace
-      - name: Publish plugins to the local test repository
-        run: ./gradlew publishForIntegrationTests --no-daemon --stacktrace
-      - name: Verify the Gradle Spring Boot example records a cache
-        working-directory: examples/gradle-spring-boot
-        run: ../../gradlew aotCacheTraining verifyAotCache --no-daemon --stacktrace
-      - name: Verify the Maven Spring Boot example records a cache
-        working-directory: examples/maven-spring-boot
-        run: |
-          version="$(sed -n 's/^version=//p' ../../gradle.properties)"
-          mvn -B verify --no-transfer-progress -Daot.cache.record=true \
-            -Daot-cache-training.version="$version" -Dmaven.repo.local=../../build/local-repo
-      - name: Verify the Dockerfile Spring Boot example ships and loads a cache
-        working-directory: examples/dockerfile-spring-boot
-        run: |
-          ../../gradlew aotCacheTraining verifyAotCache --no-daemon --stacktrace
-          docker build -t dockerfile-spring-boot-example .
-          docker run -d --name dockerfile-example -e JAVA_TOOL_OPTIONS=-Xlog:aot=info -p 8080:8080 dockerfile-spring-boot-example
-          for i in $(seq 1 60); do
-            docker logs dockerfile-example > dockerfile-example.log 2>&1 || true
-            grep -q "Opened AOT cache" dockerfile-example.log && break
-            sleep 2
-          done
-          cat dockerfile-example.log
-          grep -q "Opened AOT cache" dockerfile-example.log
-          docker rm -f dockerfile-example

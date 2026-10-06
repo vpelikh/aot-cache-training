@@ -25,15 +25,19 @@ description = "AOT cache training for integration tests"
 
 // Aggregates publishing of every module to the shared local test repository; used by the
 // Maven integration tests.
+val publishedProjects = subprojects.filter { it.name != "aot-cache-training-integration-tests" }
 tasks.register("publishForIntegrationTests") {
     group = "verification"
     description = "Publishes all modules to the local test repository for integration tests"
-    dependsOn(subprojects.map { "${it.path}:publishAllPublicationsToLocalTestRepository" })
+    dependsOn(publishedProjects.map { "${it.path}:publishAllPublicationsToLocalTestRepository" })
 }
 
 subprojects {
     apply(plugin = "java-library")
-    apply(plugin = "maven-publish")
+    // The end-to-end test module is not a published artifact.
+    if (name != "aot-cache-training-integration-tests") {
+        apply(plugin = "maven-publish")
+    }
 
     group = rootProject.group
     version = rootProject.version

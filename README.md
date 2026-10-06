@@ -54,6 +54,7 @@ tests run as an external client and talk to the application over HTTP.
 | `aot-cache-training-trainer` | `OutOfProcessTrainingLauncher`, the entry point that starts the packaged application and runs the tests as an HTTP client. |
 | `aot-cache-training-maven-plugin` | Maven `record` and `verify` goals. |
 | `aot-cache-training-gradle-plugin` | Gradle `aotCacheTraining` and `verifyAotCache` tasks. |
+| `aot-cache-training-integration-tests` | End-to-end tests: build each example's image and verify the recorded AOT cache loads. |
 
 ## Quick start
 

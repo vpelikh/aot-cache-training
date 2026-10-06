@@ -87,10 +87,41 @@ class ExampleImageTests {
 
     /** Build the example's image and assert a running container loads the recorded AOT cache. */
     private void verifyExample(Path example) throws Exception {
-        String image = Files.isRegularFile(example.resolve("build.gradle.kts"))
-                ? buildImageWithGradle(example)
-                : buildImageWithMaven(example);
-        assertImageLoadsTheCache(example.getFileName().toString(), image);
+        boolean buildpack;
+        String image;
+        if (Files.isRegularFile(example.resolve("Dockerfile"))) {
+            image = buildImageWithDockerfile(example);
+            buildpack = false;
+        }
+        else if (Files.isRegularFile(example.resolve("build.gradle.kts"))) {
+            image = buildImageWithGradle(example);
+            buildpack = true;
+        }
+        else {
+            image = buildImageWithMaven(example);
+            buildpack = true;
+        }
+        assertImageLoadsTheCache(example.getFileName().toString(), image, buildpack);
+    }
+
+    /** A hand-rolled Dockerfile example: record the cache, then a plain {@code docker build}. */
+    private String buildImageWithDockerfile(Path example) throws Exception {
+        String image = "aot-example-" + example.getFileName();
+        // Record the cache (into build/), which the Dockerfile copies into the image.
+        ProcessResult record = run(
+                List.of(REPO_ROOT.resolve("gradlew").toString(), "bootJar", "aotCacheTraining", "verifyAotCache",
+                        "--console=plain", "--no-daemon"),
+                example, Duration.ofMinutes(20));
+        assertThat(record.exitCode())
+            .as("recording for %s failed:\n%s", example, record.output())
+            .isZero();
+        ProcessResult build = run(
+                List.of("docker", "build", "-t", image, "."),
+                example, Duration.ofMinutes(20));
+        assertThat(build.exitCode())
+            .as("docker build for %s failed:\n%s", example, build.output())
+            .isZero();
+        return image;
     }
 
     private String buildImageWithGradle(Path example) throws Exception {
@@ -126,8 +157,8 @@ class ExampleImageTests {
         return matcher.group(1);
     }
 
-    /** Start the image and require it to serve HTTP while the buildpack loads the AOT cache. */
-    private static void assertImageLoadsTheCache(String label, String image) throws Exception {
+    /** Start the image and require it to serve HTTP with the recorded AOT cache loaded. */
+    private static void assertImageLoadsTheCache(String label, String image, boolean buildpack) throws Exception {
         int port = findFreePort();
         String container = "aot-example-verify-" + port;
         try {
@@ -138,10 +169,12 @@ class ExampleImageTests {
                     "-p", port + ":8080", image), REPO_ROOT, Duration.ofMinutes(5));
             awaitHttp(container, port);
             String logs = run(List.of("docker", "logs", container), REPO_ROOT, Duration.ofMinutes(2)).output();
-            assertThat(logs)
-                .as("the buildpack must enable the AOT cache in the %s image", label)
-                .contains("JVM AOT Cache Enabled")
-                .contains("-XX:AOTCache=");
+            if (buildpack) {
+                assertThat(logs)
+                    .as("the buildpack must enable the AOT cache in the %s image", label)
+                    .contains("JVM AOT Cache Enabled")
+                    .contains("-XX:AOTCache=");
+            }
             assertThat(logs)
                 .as("the JVM in the %s image must actually open the recorded AOT cache", label)
                 .contains("Opened AOT cache");

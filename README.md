@@ -214,6 +214,64 @@ content, skips its own training run, and loads the cache at startup with `-XX:AO
 > The training workload must be black-box tests that call the application over HTTP. Plain
 > `@SpringBootTest` tests run in-process and cannot drive the packaged application.
 
+#### Without a buildpack (plain Dockerfile)
+
+If you build your image with a plain `docker build` instead of `bootBuildImage`, copy the
+recorded cache into the image yourself. Two details decide whether the cache loads:
+
+- **Flatten the boot JAR** to the layout the cache was recorded against: extract it with
+  `java -Djarmode=tools -jar app.jar extract`, rename the application JAR to `runner.jar`,
+  and start the JVM with `-cp runner.jar` (its manifest `Class-Path` supplies `lib/`). A cache
+  does **not** load from the original fat-JAR class path.
+- **Normalize the extracted file timestamps**, for example
+  `find . -name '*.jar' -exec touch -d @315532801 {} +`. The JVM rejects a cache whose
+  class-path entries have changed timestamps.
+
+```dockerfile
+FROM eclipse-temurin:25
+
+RUN adduser --system --home /app --disabled-password --disabled-login app-user
+WORKDIR /app
+
+COPY build/libs/ /app/libs/
+COPY build/aot-cache/application.aot /app/aot-cache/application.aot
+
+RUN set -eux; \
+    boot_jar="$(find /app/libs -name '*.jar' ! -name '*-plain.jar' | head -n1)"; \
+    java -Djarmode=tools -jar "$boot_jar" extract --destination /app/extracted; \
+    mv /app/extracted/*.jar /app/runner.jar; \
+    mv /app/extracted/lib /app/lib; \
+    rmdir /app/extracted; \
+    rm -rf /app/libs; \
+    find /app -name '*.jar' -exec touch -d @315532801 {} +; \
+    touch -d @315532801 /app/aot-cache/application.aot; \
+    chown -R app-user /app
+
+USER app-user
+ENTRYPOINT ["java", "-XX:AOTCache=/app/aot-cache/application.aot", "-cp", "/app/runner.jar", "com.example.Application"]
+```
+
+Set `containerImage` to the same base image so the recorded cache matches the runtime JVM:
+
+```kotlin
+aotCacheTraining {
+    enabled = true
+    containerImage = "eclipse-temurin:25"
+}
+```
+
+```bash
+./gradlew aotCacheTraining verifyAotCache    # records build/aot-cache/application.aot
+docker build -t my-app .                     # ships and loads the cache
+```
+
+The `examples/dockerfile-spring-boot` example is exactly this setup and is verified end to end
+on each build.
+
+> Keep the start flags identical between the recording JVM and the runtime JVM. For example,
+> adding `--enable-native-access=ALL-UNNAMED` at runtime but not while recording makes the JVM
+> reject the cache. The JVM logs the reason when run with `-Xlog:aot=info`.
+
 ## How it works
 
 1. **Package the application.** The plugin builds the Spring Boot boot JAR (`bootJar` for

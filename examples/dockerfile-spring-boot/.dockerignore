@@ -1,0 +1,5 @@
+# The image only needs the boot JAR and the recorded cache; keep the rest out of the context.
+.gradle
+build/*
+!build/libs
+!build/aot-cache

@@ -77,4 +77,32 @@ class AppProcessTests {
         assertThatIOException().isThrownBy(() -> process.start(URI.create("http://localhost:8080/")));
     }
 
+    @Test
+    void containerIdIsTakenFromTheLastLineWhenTheImageHadToBePulled() {
+        // When the image is not present, `docker run -d` prints pull progress before the id;
+        // the container id is the last line. Taking the first line would target "Unable to
+        // find image ... locally" and leak the container.
+        String output = """
+                Unable to find image 'eclipse-temurin:25' locally
+                25: Pulling from library/eclipse-temurin
+                Digest: sha256:abc123
+                Status: Downloaded newer image for eclipse-temurin:25
+                84e30ef2982cd68345ff897349831e2f0ae6fccb896628d18d96f9c110450e42
+                """;
+        assertThat(AppProcess.containerIdFromRunOutput(output))
+            .isEqualTo("84e30ef2982cd68345ff897349831e2f0ae6fccb896628d18d96f9c110450e42");
+    }
+
+    @Test
+    void containerIdIsTakenFromTheOnlyLineWhenTheImageIsAlreadyPresent() {
+        String output = "84e30ef2982cd68345ff897349831e2f0ae6fccb896628d18d96f9c110450e42\n";
+        assertThat(AppProcess.containerIdFromRunOutput(output))
+            .isEqualTo("84e30ef2982cd68345ff897349831e2f0ae6fccb896628d18d96f9c110450e42");
+    }
+
+    @Test
+    void containerIdIsEmptyWhenNoOutputIsProduced() {
+        assertThat(AppProcess.containerIdFromRunOutput("")).isEmpty();
+        assertThat(AppProcess.containerIdFromRunOutput("\n  \n")).isEmpty();
+    }
 }

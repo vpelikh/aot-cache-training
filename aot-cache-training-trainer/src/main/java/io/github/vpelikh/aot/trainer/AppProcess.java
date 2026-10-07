@@ -229,11 +229,26 @@ public final class AppProcess {
             Files.writeString(logFile("application.log"), output);
             throw new IOException("Unable to start the recording container: " + output);
         }
-        this.containerName = output.lines().findFirst().orElse("").trim();
+        this.containerName = containerIdFromRunOutput(output);
         if (this.containerName.isEmpty()) {
             throw new IOException("Unable to start the recording container: no container id was returned");
         }
         awaitReady(readyCheck);
+    }
+
+    /**
+     * Extract the container id from a {@code docker run -d} call. The id is the last line of
+     * the output; when the image is not present yet, the runtime first prints the pull
+     * progress ("Unable to find image ... locally", "Pulling from ...", "Digest: ...") and
+     * only then the id, so the first line is NOT the id. Taking the first line would make the
+     * later {@code docker stop} target garbage, leak the container and never assemble the
+     * cache.
+     * @param output the combined stdout/stderr of {@code docker run -d}
+     * @return the container id, or an empty string when none is present
+     */
+    static String containerIdFromRunOutput(String output) {
+        List<String> lines = output.lines().filter((line) -> !line.isBlank()).toList();
+        return lines.isEmpty() ? "" : lines.get(lines.size() - 1).trim();
     }
 
     private static int waitFor(Process process, Duration timeout) throws IOException {

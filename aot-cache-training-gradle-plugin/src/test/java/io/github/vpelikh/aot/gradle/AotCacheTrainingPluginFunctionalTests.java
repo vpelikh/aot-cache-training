@@ -387,6 +387,36 @@ class AotCacheTrainingPluginFunctionalTests {
     }
 
     @Test
+    void recordingJvmArgumentsAreEmptyWhenThereIsNoImageBuild() throws IOException {
+        // Without the Spring Boot plugin there is no bootBuildImage task to derive from, so
+        // jvmArguments must fall back to an empty list rather than fail.
+        write("build.gradle.kts", """
+                plugins {
+                    java
+                    id("io.github.vpelikh.aot-cache-training")
+                }
+
+                repositories {
+                    mavenCentral()
+                }
+
+                aotCacheTraining {
+                    enabled = true
+                }
+
+                tasks.register("probeJvmArguments") {
+                    doLast {
+                        println("JVM_ARGS=" + aotCacheTraining.jvmArguments.get().joinToString(","))
+                    }
+                }
+                """);
+
+        BuildResult result = runner("probeJvmArguments").build();
+
+        assertThat(result.getOutput()).contains("JVM_ARGS=");
+    }
+
+    @Test
     void recordingJvmArgumentsAreDerivedFromTheImageEnvironment() throws IOException {
         write("build.gradle.kts", """
                 plugins {

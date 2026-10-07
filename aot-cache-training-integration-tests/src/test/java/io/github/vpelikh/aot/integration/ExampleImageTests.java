@@ -40,7 +40,13 @@ import static org.junit.jupiter.api.Assumptions.assumeTrue;
 
 /**
  * End-to-end verification of every example under {@code examples/}: each example builds a
- * container image and the built image must ship and load the recorded AOT cache.
+ * container image and the built image must start and load an AOT cache.
+ *
+ * <p>With a buildpack that supports pre-recorded caches (spring-boot 5.39.0 or later) the
+ * image loads the plugin-trained {@code aot-cache/application.aot}; with an older buildpack
+ * the buildpack records its own cache during the build instead. Either way the assertion is
+ * that the running image actually opens a cache, which is what the {@code Opened AOT cache}
+ * log line distinguishes from merely passing {@code -XX:AOTCache}.
  *
  * <p>The examples are discovered, not listed, so a new example is covered automatically
  * without touching CI. Each example is built with its own tool (Gradle or Maven), depending

@@ -199,8 +199,10 @@ buildpack looks for it.
 mvn verify spring-boot:build-image-no-fork -Daot.cache.record=true   # Maven
 ```
 
-The Paketo Spring Boot buildpack finds `aot-cache/application.aot` in the application
-content, skips its own training run, and loads the cache at startup with `-XX:AOTCache`.
+With a buildpack that supports it, the Paketo Spring Boot buildpack finds
+`aot-cache/application.aot` in the application content, skips its own training run, and loads
+the cache at startup with `-XX:AOTCache`. See the note below on buildpack versions and
+architectures, which currently matter on Apple Silicon.
 
 - Gradle points `bootBuildImage` at a cache-embedded copy of the boot JAR automatically.
 - Maven embeds the cache during the `record` goal into both the repackaged application JAR and
@@ -230,10 +232,19 @@ tasks.named<BootBuildImage>("bootBuildImage") {
 }
 ```
 
-`examples/gradle-spring-boot` and `examples/maven-spring-boot` use exactly this setup.
-
-> Pre-recorded cache support needs Paketo Spring Boot buildpack **5.39.0 or later**, and the
-> `bootBuildImage` builder must bundle it.
+> **When does the buildpack skip its own training run?** Only when it ships spring-boot
+> **5.39.0 or later** *and* finds a pre-recorded `aot-cache/application.aot` in the
+> application content (the default `BP_JVM_AOTCACHE_PATH`). Older buildpacks always re-record
+> their own cache with a training run and ignore a shipped one, so the image ends up with a
+> cache the buildpack recorded rather than your trained cache.
+>
+> At the time of writing, the Paketo **base/jammy** builders ship spring-boot 5.39.0 but are
+> **amd64-only**, while the **multi-arch** noble/tiny builder pins spring-boot 5.37.0 (below
+> 5.39). So on Apple Silicon there is currently no builder that both supports arm64 and
+> honors a pre-recorded arm64 cache: a `builder-jammy-base` build runs as `linux/amd64` and
+> refuses an arm64-trained cache (`Unable to map shared spaces`). The `examples/dockerfile-spring-boot`
+> example is the reliable way to ship a trained cache today, because it records and runs on
+> the same JVM end to end.
 
 > The training workload must be black-box tests that call the application over HTTP. Plain
 > `@SpringBootTest` tests run in-process and cannot drive the packaged application.

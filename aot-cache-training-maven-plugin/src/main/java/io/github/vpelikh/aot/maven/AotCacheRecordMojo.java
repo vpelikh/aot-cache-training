@@ -39,6 +39,7 @@ import io.github.vpelikh.aot.AotCache;
 import io.github.vpelikh.aot.JUnitPlatformVersion;
 import io.github.vpelikh.aot.trainer.OutOfProcessTrainingLauncher;
 import org.apache.maven.artifact.DependencyResolutionRequiredException;
+import org.apache.maven.model.Plugin;
 import org.apache.maven.plugin.AbstractMojo;
 import org.apache.maven.plugin.MojoExecutionException;
 import org.apache.maven.plugins.annotations.LifecyclePhase;
@@ -46,6 +47,7 @@ import org.apache.maven.plugins.annotations.Mojo;
 import org.apache.maven.plugins.annotations.Parameter;
 import org.apache.maven.plugins.annotations.ResolutionScope;
 import org.apache.maven.project.MavenProject;
+import org.codehaus.plexus.util.xml.Xpp3Dom;
 import org.eclipse.aether.RepositorySystem;
 import org.eclipse.aether.RepositorySystemSession;
 import org.eclipse.aether.artifact.Artifact;
@@ -338,10 +340,67 @@ public class AotCacheRecordMojo extends AbstractMojo {
         for (String applicationArgument : this.applicationArguments) {
             arguments.add("--application-arg=" + applicationArgument);
         }
-        for (String jvmArgument : this.jvmArguments) {
+        for (String jvmArgument : effectiveJvmArguments()) {
             arguments.add("--jvm-arg=" + jvmArgument);
         }
         return arguments;
+    }
+
+    /**
+     * The JVM options the recording JVM is started with. When the plugin's
+     * {@code jvmArguments} is set it is used as-is; otherwise the options are derived from the
+     * {@code spring-boot-maven-plugin} image environment ({@code JAVA_TOOL_OPTIONS} and
+     * {@code BPE_JDK_JAVA_OPTIONS}), so the image build is the single source of truth and the
+     * flags need not be listed twice.
+     * @return the effective recording JVM arguments
+     */
+    List<String> effectiveJvmArguments() {
+        if (!this.jvmArguments.isEmpty()) {
+            return this.jvmArguments;
+        }
+        List<String> derived = new ArrayList<>();
+        for (String key : List.of("BPE_JDK_JAVA_OPTIONS", "JAVA_TOOL_OPTIONS")) {
+            for (String value : imageEnvironmentValues(key)) {
+                for (String token : value.trim().split("\\s+")) {
+                    if (!token.isEmpty() && !derived.contains(token)) {
+                        derived.add(token);
+                    }
+                }
+            }
+        }
+        return derived;
+    }
+
+    /**
+     * Collect the values configured for {@code <image><env><NAME>} on the
+     * {@code spring-boot-maven-plugin} in this project's effective build. Inherited and
+     * profile-merged configuration is visible through {@link MavenProject}, so a value set on
+     * a parent plugin is found too.
+     * @param name the environment variable name to look up
+     * @return every matching value, in declaration order
+     */
+    private List<String> imageEnvironmentValues(String name) {
+        List<String> values = new ArrayList<>();
+        for (Plugin plugin : this.project.getBuild().getPlugins()) {
+            if (!"org.springframework.boot".equals(plugin.getGroupId())
+                    || !"spring-boot-maven-plugin".equals(plugin.getArtifactId())) {
+                continue;
+            }
+            Object configuration = plugin.getConfiguration();
+            if (!(configuration instanceof Xpp3Dom root)) {
+                continue;
+            }
+            Xpp3Dom image = root.getChild("image");
+            Xpp3Dom env = (image != null) ? image.getChild("env") : null;
+            if (env == null) {
+                continue;
+            }
+            Xpp3Dom entry = env.getChild(name);
+            if (entry != null && entry.getValue() != null) {
+                values.add(entry.getValue());
+            }
+        }
+        return values;
     }
 
     /**

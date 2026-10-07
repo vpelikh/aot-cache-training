@@ -117,7 +117,6 @@ public class AotCacheTrainingPlugin implements Plugin<Project> {
         extension.getReadyUrl().convention("http://localhost:8080/");
         extension.getContainerRuntime().convention("docker");
         extension.getApplicationArguments().convention(List.of());
-        extension.getJvmArguments().convention(List.of());
         extension.getStartTimeout().convention(120);
 
         Path buildDirectory = project.getLayout().getBuildDirectory().get().getAsFile().toPath();
@@ -205,6 +204,41 @@ public class AotCacheTrainingPlugin implements Plugin<Project> {
                     throw new IllegalStateException("Unable to configure bootBuildImage for the AOT cache", ex);
                 }
             });
+            // The image build environment is the single source of truth for the JVM flags the
+            // cache must be recorded with. The buildpack launches the build-container training
+            // JVM with JAVA_TOOL_OPTIONS and the run JVM with BPE_JDK_JAVA_OPTIONS ->
+            // JDK_JAVA_OPTIONS, so derive the recording jvmArguments from those same flags and
+            // spare the user from listing them twice. An explicit aotCacheTraining.jvmArguments
+            // still wins, because convention only supplies a value when the property was never
+            // set. Resolve against the task provider (not inside the lazy configure action) so
+            // the derivation is available even when bootBuildImage is never realized.
+            TaskProvider<Task> buildImageTask = project.getTasks().named("bootBuildImage");
+            Provider<List<String>> derivedFromImageEnvironment = buildImageTask.map((buildImage) -> {
+                try {
+                    @SuppressWarnings("unchecked")
+                    MapProperty<String, String> imageEnvironment = (MapProperty<String, String>) buildImage
+                        .getClass()
+                        .getMethod("getEnvironment")
+                        .invoke(buildImage);
+                    List<String> flags = new ArrayList<>();
+                    for (String key : List.of("BPE_JDK_JAVA_OPTIONS", "JAVA_TOOL_OPTIONS")) {
+                        String value = imageEnvironment.get().get(key);
+                        if (value == null || value.isBlank()) {
+                            continue;
+                        }
+                        for (String token : value.trim().split("\\s+")) {
+                            if (!token.isEmpty() && !flags.contains(token)) {
+                                flags.add(token);
+                            }
+                        }
+                    }
+                    return flags;
+                }
+                catch (ReflectiveOperationException ex) {
+                    throw new IllegalStateException("Unable to read the bootBuildImage environment", ex);
+                }
+            });
+            extension.getJvmArguments().convention(derivedFromImageEnvironment);
         });
     }
 

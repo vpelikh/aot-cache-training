@@ -117,6 +117,11 @@ public abstract class AotCacheTrainingExtension {
      * set these to whatever the runtime adds, for example
      * {@code listOf("--enable-native-access=ALL-UNNAMED")}. Applies to both the local and the
      * {@link #getContainerImage() container} recording JVM.
+     *
+     * <p>When unset, the options are derived from the {@code bootBuildImage} task's
+     * environment ({@code JAVA_TOOL_OPTIONS} and {@code BPE_JDK_JAVA_OPTIONS}), so the image
+     * build is the single source of truth and the flags need not be listed here as well. Set
+     * this property explicitly to override that derivation.
      * @return the jvm-arguments property
      */
     public abstract ListProperty<String> getJvmArguments();

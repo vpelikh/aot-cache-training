@@ -83,14 +83,10 @@
                         </goals>
                     </execution>
                 </executions>
-                <configuration>
-                    <!-- Record with the same option the runtime starts with, otherwise the JVM
-                         rejects the cache. The matching runtime side is JAVA_TOOL_OPTIONS /
-                         BPE_JDK_JAVA_OPTIONS in the image env above. -->
-                    <jvmArguments>
-                        <jvmArgument>--enable-native-access=ALL-UNNAMED</jvmArgument>
-                    </jvmArguments>
-                </configuration>
+                <!-- The recording JVM options are derived from the spring-boot-maven-plugin
+                     image env above (JAVA_TOOL_OPTIONS / BPE_JDK_JAVA_OPTIONS), so the image
+                     build is the single source of truth. Set <jvmArguments> here only to
+                     override that derivation. -->
             </plugin>
         </plugins>
     </build>

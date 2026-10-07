@@ -29,25 +29,21 @@ aotCacheTraining {
     // specific image so the cache matches that image's JVM build and architecture.
     // containerImage = "my-app:latest"
     //
-    // If the runtime starts the JVM with extra options, record with the same ones, otherwise
-    // the JVM rejects the cache. Pass them here and give the buildpack the same options at
-    // run time through bootBuildImage (below).
-    jvmArguments = listOf("--enable-native-access=ALL-UNNAMED")
+    // The recording JVM's extra options are taken from the bootBuildImage environment below,
+    // so the image build is the single source of truth. Set jvmArguments here only to
+    // override that derivation.
 }
 
-// The image must start the JVM with the same option that aotCacheTraining.jvmArguments
-// records with, and the buildpack records the cache in the build container, so the option is
-// needed in two places:
+// Configure the JVM flags the cache is recorded and loaded with in one place: the image
+// build environment. The plugin reads these and uses them as the recording JVM's options, so
+// aotCacheTraining.jvmArguments does not have to repeat them.
 //
-//  - the build container (plain JAVA_TOOL_OPTIONS), which the buildpack's own AOT training
-//    run inherits, so the recorded cache matches the flag;
-//  - the run image (BPE_JDK_JAVA_OPTIONS), which the upstream environment-variables buildpack
-//    bakes in as a launch-time JDK_JAVA_OPTIONS; a bare JAVA_TOOL_OPTIONS here would only set
-//    the build container.
-//
-// Use JDK_JAVA_OPTIONS, not JAVA_TOOL_OPTIONS, for the runtime half: the JVM prepends it
-// without resetting the rest of JAVA_TOOL_OPTIONS, so it composes with what the buildpack
-// already contributes.
+//  - JAVA_TOOL_OPTIONS reaches the build container, so the buildpack's own AOT training run
+//    records with the same flags;
+//  - BPE_JDK_JAVA_OPTIONS is baked into the run image as a launch-time JDK_JAVA_OPTIONS by
+//    the upstream environment-variables buildpack. A bare JAVA_TOOL_OPTIONS here would set
+//    only the build container, and JDK_JAVA_OPTIONS composes with the JAVA_TOOL_OPTIONS the
+//    buildpack already contributes.
 tasks.named<BootBuildImage>("bootBuildImage") {
     environment.put("JAVA_TOOL_OPTIONS", "--enable-native-access=ALL-UNNAMED")
     environment.put("BPE_JDK_JAVA_OPTIONS", "--enable-native-access=ALL-UNNAMED")

@@ -152,7 +152,7 @@ Both build tools share the same optional settings; the ones you are most likely 
 | --- | --- | --- |
 | `readyUrl` | `http://localhost:8080/` | URL polled until the application is ready. |
 | `containerImage` | unset | Record inside this image's JVM instead of the local one. Only needed when the runtime image's JVM build or architecture differs from your build host. |
-| `jvmArguments` | unset | Extra JVM options for the recording JVM, for example `--enable-native-access=ALL-UNNAMED`. An AOT cache only loads when the runtime JVM uses the same options it was recorded with. |
+| `jvmArguments` | derived from the image env | Extra JVM options for the recording JVM, for example `--enable-native-access=ALL-UNNAMED`. When unset, the plugin derives them from `bootBuildImage` / `spring-boot-maven-plugin` image env (`JAVA_TOOL_OPTIONS`, `BPE_JDK_JAVA_OPTIONS`); set explicitly to override. An AOT cache only loads when the runtime JVM uses the same options it was recorded with. |
 | `packagesToScan` | unset | Limit the training workload to specific packages. |
 | `failOnTestFailure` | `true` | Fail the training run when a test fails. |
 | `allowEmptyWorkload` | `false` | Record even when no tests are discovered. |
@@ -212,14 +212,24 @@ architectures, which currently matter on Apple Silicon.
   `package` and would overwrite the embedded JAR.
 
 When the runtime must start with extra JVM options (for example
-`--enable-native-access=ALL-UNNAMED`), record with the same ones via `jvmArguments` /
-`<jvmArguments>`, and supply them to the buildpack image in **two** places:
+`--enable-native-access=ALL-UNNAMED`), configure them **once, on the image build**, and the
+plugin uses them for the recording JVM so the two never drift:
 
-- **Build container** (`JAVA_TOOL_OPTIONS`): the buildpack's own AOT training run inherits it,
-  so the cache it records matches the option.
+- Gradle: set `bootBuildImage.environment`.
+- Maven: set the `spring-boot-maven-plugin` `<image><env>`.
+
+The plugin reads `JAVA_TOOL_OPTIONS` and `BPE_JDK_JAVA_OPTIONS` from that environment and
+derives the recording `jvmArguments`, so you do not list the flags twice. Setting
+`jvmArguments` / `<jvmArguments>` explicitly still overrides the derivation.
+
+Both variables matter, because the buildpack runs the cache recording in the **build
+container** and loads the cache in the **run image**:
+
+- **Build container** (`JAVA_TOOL_OPTIONS`): the buildpack's AOT training run inherits it, so
+  the cache it records matches the flag.
 - **Run image** (`BPE_JDK_JAVA_OPTIONS`): the upstream `environment-variables` buildpack bakes
-  this into a launch-time `JDK_JAVA_OPTIONS`. A bare `JAVA_TOOL_OPTIONS` passed to
-  `bootBuildImage` sets only the build container, so the run image never sees it.
+  this into a launch-time `JDK_JAVA_OPTIONS`. A bare `JAVA_TOOL_OPTIONS` sets only the build
+  container, so the run image never sees it.
 
 Prefer `JDK_JAVA_OPTIONS` for the runtime half. The JVM prepends it without resetting the
 `JAVA_TOOL_OPTIONS` the buildpack already contributes, so it composes with the
@@ -227,9 +237,25 @@ memory-calculator and other launch options.
 
 ```kotlin
 tasks.named<BootBuildImage>("bootBuildImage") {
+    // Single source of truth: the plugin records with these same flags.
     environment.put("JAVA_TOOL_OPTIONS", "--enable-native-access=ALL-UNNAMED")
     environment.put("BPE_JDK_JAVA_OPTIONS", "--enable-native-access=ALL-UNNAMED")
 }
+```
+
+```xml
+<plugin>
+    <groupId>org.springframework.boot</groupId>
+    <artifactId>spring-boot-maven-plugin</artifactId>
+    <configuration>
+        <image>
+            <env>
+                <JAVA_TOOL_OPTIONS>--enable-native-access=ALL-UNNAMED</JAVA_TOOL_OPTIONS>
+                <BPE_JDK_JAVA_OPTIONS>--enable-native-access=ALL-UNNAMED</BPE_JDK_JAVA_OPTIONS>
+            </env>
+        </image>
+    </configuration>
+</plugin>
 ```
 
 > **When does the buildpack skip its own training run?** Only when it ships spring-boot

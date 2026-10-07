@@ -386,6 +386,85 @@ class AotCacheTrainingPluginFunctionalTests {
         assertThat(result.getOutput()).contains("AOT_FLAG=true");
     }
 
+    @Test
+    void recordingJvmArgumentsAreDerivedFromTheImageEnvironment() throws IOException {
+        write("build.gradle.kts", """
+                plugins {
+                    java
+                    id("org.springframework.boot") version "%s"
+                    id("io.github.vpelikh.aot-cache-training")
+                }
+
+                repositories {
+                    mavenCentral()
+                }
+
+                dependencies {
+                    implementation(platform("org.springframework.boot:spring-boot-dependencies:%s"))
+                    implementation("org.springframework.boot:spring-boot-starter-web")
+                }
+
+                aotCacheTraining {
+                    enabled = true
+                }
+
+                tasks.named<org.springframework.boot.gradle.tasks.bundling.BootBuildImage>("bootBuildImage") {
+                    environment.put("JAVA_TOOL_OPTIONS", "--enable-native-access=ALL-UNNAMED -Xmx512m")
+                    environment.put("BPE_JDK_JAVA_OPTIONS", "--enable-native-access=ALL-UNNAMED")
+                }
+
+                tasks.register("probeJvmArguments") {
+                    doLast {
+                        println("JVM_ARGS=" + aotCacheTraining.jvmArguments.get().joinToString(","))
+                    }
+                }
+                """.formatted(SPRING_BOOT_VERSION, SPRING_BOOT_VERSION));
+
+        BuildResult result = runner("probeJvmArguments").build();
+
+        assertThat(result.getOutput())
+            .contains("JVM_ARGS=--enable-native-access=ALL-UNNAMED,-Xmx512m");
+    }
+
+    @Test
+    void explicitJvmArgumentsOverrideTheImageEnvironment() throws IOException {
+        write("build.gradle.kts", """
+                plugins {
+                    java
+                    id("org.springframework.boot") version "%s"
+                    id("io.github.vpelikh.aot-cache-training")
+                }
+
+                repositories {
+                    mavenCentral()
+                }
+
+                dependencies {
+                    implementation(platform("org.springframework.boot:spring-boot-dependencies:%s"))
+                    implementation("org.springframework.boot:spring-boot-starter-web")
+                }
+
+                aotCacheTraining {
+                    enabled = true
+                    jvmArguments = listOf("-Xmx256m")
+                }
+
+                tasks.named<org.springframework.boot.gradle.tasks.bundling.BootBuildImage>("bootBuildImage") {
+                    environment.put("JAVA_TOOL_OPTIONS", "--enable-native-access=ALL-UNNAMED")
+                }
+
+                tasks.register("probeJvmArguments") {
+                    doLast {
+                        println("JVM_ARGS=" + aotCacheTraining.jvmArguments.get().joinToString(","))
+                    }
+                }
+                """.formatted(SPRING_BOOT_VERSION, SPRING_BOOT_VERSION));
+
+        BuildResult result = runner("probeJvmArguments").build();
+
+        assertThat(result.getOutput()).contains("JVM_ARGS=-Xmx256m");
+    }
+
     private void writeApplication() throws IOException {
         write("src/main/java/sample/App.java", """
                 package sample;

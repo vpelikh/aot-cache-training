@@ -27,7 +27,9 @@ import java.util.zip.ZipEntry;
 import java.util.zip.ZipFile;
 
 import org.apache.maven.model.Build;
+import org.apache.maven.model.Plugin;
 import org.apache.maven.project.MavenProject;
+import org.codehaus.plexus.util.xml.Xpp3Dom;
 import org.junit.jupiter.api.Test;
 import org.junit.jupiter.api.io.TempDir;
 
@@ -152,6 +154,60 @@ class AotCacheRecordMojoTests {
             }
             return extracted;
         }
+    }
+
+    @Test
+    void derivesJvmArgumentsFromTheImageEnvironment(@TempDir Path basedir) {
+        MavenProject project = project(basedir);
+        project.getBuild().addPlugin(imagePlugin("--enable-native-access=ALL-UNNAMED -Xmx512m"));
+        AotCacheRecordMojo mojo = new AotCacheRecordMojo();
+        mojo.setProject(project);
+
+        assertThat(mojo.effectiveJvmArguments())
+            .containsExactly("--enable-native-access=ALL-UNNAMED", "-Xmx512m");
+    }
+
+    @Test
+    void derivesJvmArgumentsFromTheRunImageOverride(@TempDir Path basedir) {
+        MavenProject project = project(basedir);
+        project.getBuild().addPlugin(imagePlugin(null));
+        AotCacheRecordMojo mojo = new AotCacheRecordMojo();
+        mojo.setProject(project);
+
+        assertThat(mojo.effectiveJvmArguments())
+            .containsExactly("--enable-native-access=ALL-UNNAMED");
+    }
+
+    @Test
+    void explicitJvmArgumentsOverrideTheImageEnvironment(@TempDir Path basedir) {
+        MavenProject project = project(basedir);
+        project.getBuild().addPlugin(imagePlugin("--enable-native-access=ALL-UNNAMED"));
+        AotCacheRecordMojo mojo = new AotCacheRecordMojo();
+        mojo.setProject(project);
+        mojo.setJvmArguments(List.of("-Xmx256m"));
+
+        assertThat(mojo.effectiveJvmArguments()).containsExactly("-Xmx256m");
+    }
+
+    private Plugin imagePlugin(String javaToolOptions) {
+        Plugin plugin = new Plugin();
+        plugin.setGroupId("org.springframework.boot");
+        plugin.setArtifactId("spring-boot-maven-plugin");
+        Xpp3Dom env = new Xpp3Dom("env");
+        if (javaToolOptions != null) {
+            Xpp3Dom javaToolOptionsEntry = new Xpp3Dom("JAVA_TOOL_OPTIONS");
+            javaToolOptionsEntry.setValue(javaToolOptions);
+            env.addChild(javaToolOptionsEntry);
+        }
+        Xpp3Dom bpeEntry = new Xpp3Dom("BPE_JDK_JAVA_OPTIONS");
+        bpeEntry.setValue("--enable-native-access=ALL-UNNAMED");
+        env.addChild(bpeEntry);
+        Xpp3Dom image = new Xpp3Dom("image");
+        image.addChild(env);
+        Xpp3Dom configuration = new Xpp3Dom("configuration");
+        configuration.addChild(image);
+        plugin.setConfiguration(configuration);
+        return plugin;
     }
 
     private void writeBootJar(Path jar, String startClass) throws IOException {

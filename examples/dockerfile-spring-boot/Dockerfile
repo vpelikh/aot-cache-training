@@ -41,4 +41,5 @@ USER app-user
 
 # Load the recorded cache at startup. It is used only when the JVM build, architecture, class
 # path and flags match the recording; otherwise the JVM logs a warning and starts without it.
-ENTRYPOINT ["java", "-XX:AOTCache=/app/aot-cache/application.aot", "-cp", "/app/runner.jar", "example.ExampleApplication"]
+# The flags here must match aotCacheTraining.jvmArguments in build.gradle.kts.
+ENTRYPOINT ["java", "--enable-native-access=ALL-UNNAMED", "-XX:AOTCache=/app/aot-cache/application.aot", "-cp", "/app/runner.jar", "example.ExampleApplication"]

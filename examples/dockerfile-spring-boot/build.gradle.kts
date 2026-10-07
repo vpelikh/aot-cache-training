@@ -26,6 +26,11 @@ aotCacheTraining {
     // JVM build and architecture. Without this the cache would be recorded on the build
     // host's JVM and the container's JVM would reject it.
     containerImage = "eclipse-temurin:25"
+
+    // Pass the same JVM option the container starts with (see the Dockerfile ENTRYPOINT). An
+    // AOT cache only loads when the runtime JVM uses the same options it was recorded with;
+    // omit this and the container's -XX:AOTCache is silently ignored.
+    jvmArguments = listOf("--enable-native-access=ALL-UNNAMED")
 }
 
 // Recording produces build/aot-cache/application.aot (recorded inside the image above). The

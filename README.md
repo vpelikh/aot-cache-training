@@ -209,6 +209,29 @@ content, skips its own training run, and loads the cache at startup with `-XX:AO
   out). Use `build-image-no-fork`, not `build-image`: the forking `build-image` goal reruns
   `package` and would overwrite the embedded JAR.
 
+When the runtime must start with extra JVM options (for example
+`--enable-native-access=ALL-UNNAMED`), record with the same ones via `jvmArguments` /
+`<jvmArguments>`, and supply them to the buildpack image in **two** places:
+
+- **Build container** (`JAVA_TOOL_OPTIONS`): the buildpack's own AOT training run inherits it,
+  so the cache it records matches the option.
+- **Run image** (`BPE_JDK_JAVA_OPTIONS`): the upstream `environment-variables` buildpack bakes
+  this into a launch-time `JDK_JAVA_OPTIONS`. A bare `JAVA_TOOL_OPTIONS` passed to
+  `bootBuildImage` sets only the build container, so the run image never sees it.
+
+Prefer `JDK_JAVA_OPTIONS` for the runtime half. The JVM prepends it without resetting the
+`JAVA_TOOL_OPTIONS` the buildpack already contributes, so it composes with the
+memory-calculator and other launch options.
+
+```kotlin
+tasks.named<BootBuildImage>("bootBuildImage") {
+    environment.put("JAVA_TOOL_OPTIONS", "--enable-native-access=ALL-UNNAMED")
+    environment.put("BPE_JDK_JAVA_OPTIONS", "--enable-native-access=ALL-UNNAMED")
+}
+```
+
+`examples/gradle-spring-boot` and `examples/maven-spring-boot` use exactly this setup.
+
 > Pre-recorded cache support needs Paketo Spring Boot buildpack **5.39.0 or later**, and the
 > `bootBuildImage` builder must bundle it.
 

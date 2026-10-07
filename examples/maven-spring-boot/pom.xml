@@ -51,6 +51,13 @@
                                  top-level aot-cache/ under BOOT-INF/classes/, so point the
                                  buildpack at the delivered location. -->
                             <BP_JVM_AOTCACHE_PATH>BOOT-INF/classes/aot-cache/application.aot</BP_JVM_AOTCACHE_PATH>
+                            <!-- The image must start the JVM with the same option the cache was
+                                 recorded with. The buildpack records the cache in the build
+                                 container, so the option is needed twice: JAVA_TOOL_OPTIONS for
+                                 the build container (the training run inherits it), and a
+                                 BPE_JDK_JAVA_OPTIONS launch override for the run image. -->
+                            <JAVA_TOOL_OPTIONS>--enable-native-access=ALL-UNNAMED</JAVA_TOOL_OPTIONS>
+                            <BPE_JDK_JAVA_OPTIONS>--enable-native-access=ALL-UNNAMED</BPE_JDK_JAVA_OPTIONS>
                         </env>
                     </image>
                 </configuration>
@@ -76,6 +83,14 @@
                         </goals>
                     </execution>
                 </executions>
+                <configuration>
+                    <!-- Record with the same option the runtime starts with, otherwise the JVM
+                         rejects the cache. The matching runtime side is JAVA_TOOL_OPTIONS /
+                         BPE_JDK_JAVA_OPTIONS in the image env above. -->
+                    <jvmArguments>
+                        <jvmArgument>--enable-native-access=ALL-UNNAMED</jvmArgument>
+                    </jvmArguments>
+                </configuration>
             </plugin>
         </plugins>
     </build>

@@ -112,6 +112,16 @@ public abstract class AotCacheTrainingExtension {
     public abstract ListProperty<String> getApplicationArguments();
 
     /**
+     * Extra JVM options passed to the recording JVM (before {@code -cp}). An AOT cache only
+     * loads when the runtime JVM is started with the same options it was recorded with, so
+     * set these to whatever the runtime adds, for example
+     * {@code listOf("--enable-native-access=ALL-UNNAMED")}. Applies to both the local and the
+     * {@link #getContainerImage() container} recording JVM.
+     * @return the jvm-arguments property
+     */
+    public abstract ListProperty<String> getJvmArguments();
+
+    /**
      * How long to wait for the application to become ready during training, in
      * seconds. Defaults to {@code 120}.
      * @return the start-timeout property

@@ -82,6 +82,8 @@ public final class AppProcess {
 
     private final List<String> applicationArguments;
 
+    private final List<String> jvmArguments;
+
     private final Duration startTimeout;
 
     private final String containerImage;
@@ -105,10 +107,14 @@ public final class AppProcess {
      * @param containerImage the container image whose JVM records the cache, or {@code null}
      * to use {@code javaExecutable}
      * @param containerRuntime the container runtime executable (for example {@code docker})
+     * @param jvmArguments extra JVM options passed to the recording JVM. An AOT cache only
+     * loads when the runtime JVM is started with the same options it was recorded with, so
+     * set these to whatever the runtime adds (for example
+     * {@code --enable-native-access=ALL-UNNAMED})
      */
     public AppProcess(Path appJar, Path layoutDirectory, Path cacheFile, String javaExecutable, String startClass,
             List<String> applicationArguments, Duration startTimeout, String containerImage,
-            String containerRuntime) {
+            String containerRuntime, List<String> jvmArguments) {
         this.appJar = appJar;
         this.layoutDirectory = layoutDirectory;
         this.cacheFile = cacheFile;
@@ -118,6 +124,26 @@ public final class AppProcess {
         this.startTimeout = startTimeout;
         this.containerImage = containerImage;
         this.containerRuntime = containerRuntime;
+        this.jvmArguments = List.copyOf(jvmArguments);
+    }
+
+    /**
+     * Create a harness that passes no extra JVM options to the recording JVM.
+     * @param appJar the packaged Spring Boot application JAR
+     * @param layoutDirectory a working directory to extract the application into
+     * @param cacheFile the AOT cache output path
+     * @param javaExecutable the local {@code java} executable
+     * @param startClass the application start class
+     * @param applicationArguments arguments passed to the application
+     * @param startTimeout how long to wait for the application to become ready
+     * @param containerImage the container image whose JVM records the cache, or {@code null}
+     * @param containerRuntime the container runtime executable
+     */
+    public AppProcess(Path appJar, Path layoutDirectory, Path cacheFile, String javaExecutable, String startClass,
+            List<String> applicationArguments, Duration startTimeout, String containerImage,
+            String containerRuntime) {
+        this(appJar, layoutDirectory, cacheFile, javaExecutable, startClass, applicationArguments, startTimeout,
+                containerImage, containerRuntime, List.of());
     }
 
     /**
@@ -281,10 +307,20 @@ public final class AppProcess {
         return localCommand();
     }
 
+    /**
+     * The command that records the cache, exposed for tests.
+     * @param readyCheck the readiness URL (used for the container's published port)
+     * @return the command line
+     */
+    List<String> command(URI readyCheck) {
+        return buildCommand(readyCheck);
+    }
+
     private List<String> localCommand() {
         List<String> command = new ArrayList<>();
         command.add(this.javaExecutable);
         command.add(AotCache.recordingArgument(this.cacheFile.toAbsolutePath()));
+        command.addAll(this.jvmArguments);
         command.add("-cp");
         command.add("runner.jar");
         command.add(this.startClass);
@@ -318,6 +354,7 @@ public final class AppProcess {
         command.add("java");
         command.add(this.containerImage);
         command.add(AotCache.recordingArgument(Path.of(CONTAINER_CACHE_DIR, cacheName)));
+        command.addAll(this.jvmArguments);
         command.add("-cp");
         command.add("runner.jar");
         command.add(this.startClass);

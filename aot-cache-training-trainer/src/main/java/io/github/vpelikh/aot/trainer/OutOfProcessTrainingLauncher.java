@@ -101,7 +101,7 @@ public final class OutOfProcessTrainingLauncher {
                 + options.cacheFile);
         AppProcess process = new AppProcess(options.appJar, options.layoutDirectory, options.cacheFile,
                 options.javaExecutable, options.startClass, options.applicationArguments, options.startTimeout,
-                options.containerImage, options.containerRuntime);
+                options.containerImage, options.containerRuntime, options.jvmArguments);
         int exitCode;
         boolean started = false;
         // Keep the start inside the try: if the application never becomes ready (or extraction
@@ -178,6 +178,8 @@ public final class OutOfProcessTrainingLauncher {
 
         private final List<String> applicationArguments = new ArrayList<>();
 
+        private final List<String> jvmArguments = new ArrayList<>();
+
         private Duration startTimeout = Duration.ofSeconds(120);
 
         private static Options parse(List<String> args) {
@@ -211,6 +213,9 @@ public final class OutOfProcessTrainingLauncher {
                 else if (argument.startsWith("--application-arg=")) {
                     options.applicationArguments.add(argument.substring("--application-arg=".length()));
                 }
+                else if (argument.startsWith("--jvm-arg=")) {
+                    options.jvmArguments.add(argument.substring("--jvm-arg=".length()));
+                }
                 else if (argument.startsWith("--start-timeout=")) {
                     options.startTimeout = Duration
                         .ofSeconds(Long.parseLong(argument.substring("--start-timeout=".length())));
@@ -230,7 +235,8 @@ public final class OutOfProcessTrainingLauncher {
                 throw new IllegalArgumentException(
                         "Usage: OutOfProcessTrainingLauncher --app-jar <jar> --cache <file> --ready-url <url> "
                                 + "[--start-class <class>] [--layout <dir>] [--java <path>] [--image <image>] "
-                                + "[--container-runtime <name>] [--application-arg <value>] [--start-timeout <seconds>]");
+                                + "[--container-runtime <name>] [--application-arg <value>] [--jvm-arg <value>] "
+                                + "[--start-timeout <seconds>]");
             }
             if (options.layoutDirectory == null) {
                 Path parent = options.cacheFile.toAbsolutePath().getParent();

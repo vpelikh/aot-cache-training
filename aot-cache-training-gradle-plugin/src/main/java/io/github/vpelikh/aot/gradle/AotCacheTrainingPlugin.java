@@ -117,6 +117,7 @@ public class AotCacheTrainingPlugin implements Plugin<Project> {
         extension.getReadyUrl().convention("http://localhost:8080/");
         extension.getContainerRuntime().convention("docker");
         extension.getApplicationArguments().convention(List.of());
+        extension.getJvmArguments().convention(List.of());
         extension.getStartTimeout().convention(120);
 
         Path buildDirectory = project.getLayout().getBuildDirectory().get().getAsFile().toPath();

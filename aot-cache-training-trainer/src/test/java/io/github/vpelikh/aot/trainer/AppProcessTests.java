@@ -105,4 +105,42 @@ class AppProcessTests {
         assertThat(AppProcess.containerIdFromRunOutput("")).isEmpty();
         assertThat(AppProcess.containerIdFromRunOutput("\n  \n")).isEmpty();
     }
+
+    @Test
+    void jvmArgumentsArePassedToTheLocalRecordingJvm(@TempDir Path tempDir) {
+        AppProcess process = new AppProcess(tempDir.resolve("app.jar"), tempDir.resolve("layout"),
+                tempDir.resolve("cache/application.aot"), "java", "sample.App", List.of(),
+                Duration.ofSeconds(5), null, "docker", List.of("--enable-native-access=ALL-UNNAMED"));
+
+        List<String> command = process.command(URI.create("http://localhost:8080/"));
+
+        // The flag must sit before -cp so the JVM treats it as a JVM option, not a class.
+        assertThat(command).containsSubsequence(
+                "java", "--enable-native-access=ALL-UNNAMED", "-cp", "runner.jar", "sample.App");
+    }
+
+    @Test
+    void jvmArgumentsArePassedToTheContainerRecordingJvm(@TempDir Path tempDir) {
+        AppProcess process = new AppProcess(tempDir.resolve("app.jar"), tempDir.resolve("layout"),
+                tempDir.resolve("cache/application.aot"), "java", "sample.App", List.of(),
+                Duration.ofSeconds(5), "my-app:latest", "docker", List.of("--enable-native-access=ALL-UNNAMED"));
+
+        List<String> command = process.command(URI.create("http://localhost:8080/"));
+
+        // Same, after the image name and -XX:AOTCacheOutput, before -cp.
+        assertThat(command).containsSubsequence(
+                "my-app:latest", "--enable-native-access=ALL-UNNAMED", "-cp", "runner.jar", "sample.App");
+    }
+
+    @Test
+    void noJvmArgumentsKeepsThePlainCommand(@TempDir Path tempDir) {
+        AppProcess process = new AppProcess(tempDir.resolve("app.jar"), tempDir.resolve("layout"),
+                tempDir.resolve("cache/application.aot"), "java", "sample.App", List.of(),
+                Duration.ofSeconds(5), null, "docker");
+
+        List<String> command = process.command(URI.create("http://localhost:8080/"));
+
+        assertThat(command).containsSubsequence("java", "-cp", "runner.jar", "sample.App");
+        assertThat(command).noneMatch((argument) -> argument.startsWith("--enable-native-access"));
+    }
 }

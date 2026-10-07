@@ -67,6 +67,9 @@ class OutOfProcessArgsProvider implements CommandLineArgumentProvider {
         for (String applicationArgument : this.extension.getApplicationArguments().getOrElse(List.of())) {
             args.add("--application-arg=" + applicationArgument);
         }
+        for (String jvmArgument : this.extension.getJvmArguments().getOrElse(List.of())) {
+            args.add("--jvm-arg=" + jvmArgument);
+        }
         for (String packageName : this.extension.getPackagesToScan().getOrElse(List.of())) {
             args.add("--select-package=" + packageName);
         }

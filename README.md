@@ -152,6 +152,7 @@ Both build tools share the same optional settings; the ones you are most likely 
 | --- | --- | --- |
 | `readyUrl` | `http://localhost:8080/` | URL polled until the application is ready. |
 | `containerImage` | unset | Record inside this image's JVM instead of the local one. Only needed when the runtime image's JVM build or architecture differs from your build host. |
+| `jvmArguments` | unset | Extra JVM options for the recording JVM, for example `--enable-native-access=ALL-UNNAMED`. An AOT cache only loads when the runtime JVM uses the same options it was recorded with. |
 | `packagesToScan` | unset | Limit the training workload to specific packages. |
 | `failOnTestFailure` | `true` | Fail the training run when a test fails. |
 | `allowEmptyWorkload` | `false` | Record even when no tests are discovered. |
@@ -268,9 +269,20 @@ docker build -t my-app .                     # ships and loads the cache
 The `examples/dockerfile-spring-boot` example is exactly this setup and is verified end to end
 on each build.
 
-> Keep the start flags identical between the recording JVM and the runtime JVM. For example,
-> adding `--enable-native-access=ALL-UNNAMED` at runtime but not while recording makes the JVM
-> reject the cache. The JVM logs the reason when run with `-Xlog:aot=info`.
+> Keep the start flags identical between the recording JVM and the runtime JVM. If the
+> runtime passes a JVM option the recording does not, the JVM rejects the cache (for example
+> `Mismatched values for property jdk.module.enable.native.access`). Add the option to the
+> recording with `jvmArguments`:
+>
+> ```kotlin
+> aotCacheTraining {
+>     enabled = true
+>     containerImage = "eclipse-temurin:25"
+>     jvmArguments = listOf("--enable-native-access=ALL-UNNAMED")
+> }
+> ```
+>
+> The JVM logs the reason when run with `-Xlog:aot=info`.
 
 ## How it works
 

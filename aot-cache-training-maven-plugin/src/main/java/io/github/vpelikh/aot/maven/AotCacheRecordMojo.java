@@ -194,6 +194,16 @@ public class AotCacheRecordMojo extends AbstractMojo {
     private List<String> applicationArguments = new ArrayList<>();
 
     /**
+     * Extra JVM options passed to the recording JVM (before <code>-cp</code>). An AOT cache
+     * only loads when the runtime JVM is started with the same options it was recorded with,
+     * so set these to whatever the runtime adds, for example
+     * <code>&lt;jvmArgument&gt;--enable-native-access=ALL-UNNAMED&lt;/jvmArgument&gt;</code>.
+     * Applies to both the local and the <code>containerImage</code> recording JVM.
+     */
+    @Parameter
+    private List<String> jvmArguments = new ArrayList<>();
+
+    /**
      * How long to wait for the application to become ready during training, in seconds.
      * Defaults to <code>120</code>.
      */
@@ -327,6 +337,9 @@ public class AotCacheRecordMojo extends AbstractMojo {
         arguments.add("--start-timeout=" + this.startTimeout);
         for (String applicationArgument : this.applicationArguments) {
             arguments.add("--application-arg=" + applicationArgument);
+        }
+        for (String jvmArgument : this.jvmArguments) {
+            arguments.add("--jvm-arg=" + jvmArgument);
         }
         return arguments;
     }
@@ -603,6 +616,10 @@ public class AotCacheRecordMojo extends AbstractMojo {
 
     void setApplicationArguments(List<String> applicationArguments) {
         this.applicationArguments = applicationArguments;
+    }
+
+    void setJvmArguments(List<String> jvmArguments) {
+        this.jvmArguments = jvmArguments;
     }
 
     void setStartTimeout(int startTimeout) {
